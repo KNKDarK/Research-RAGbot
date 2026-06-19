@@ -1,0 +1,18 @@
+stages:
+  - test
+
+pre-commit:
+  stage: test
+  image: python:3.11-slim
+  variables:
+    PRE_COMMIT_HOME: ${CI_PROJECT_DIR}/.cache/pre-commit
+  cache:
+    paths:
+      - .cache/pre-commit
+  before_script:
+    - pip install pre-commit
+    - python -m venv myvenv
+    - source myvenv/bin/activate
+    - pip install -r requirements.txt
+  script:
+    - PYTHONPATH=. pre-commit run --all-files --show-diff-on-failure
