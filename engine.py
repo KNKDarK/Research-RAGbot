@@ -10,7 +10,6 @@ engine.py — Optimized RAG Engine
 import os
 import shutil
 from pathlib import Path
-from typing import List, Tuple, Optional
 
 # ── ROCm / AMD GPU hints (set before importing anything GPU-related) ──────────
 os.environ.setdefault("HSA_OVERRIDE_GFX_VERSION", "10.3.0")  # RDNA2 gfx1034
@@ -63,10 +62,10 @@ Helpful Answer:"""
 _embeddings = OllamaEmbeddings(model=EMBED_MODEL)
 
 # ── ChromaDB cache (avoid reloading from disk) ───────────────────────────────
-_db_cache: Optional[Chroma] = None
+_db_cache: Chroma | None = None
 
 
-def _load_store() -> Optional[Chroma]:
+def _load_store() -> Chroma | None:
     """Load existing ChromaDB if it has data (cached after first load)."""
     global _db_cache
     if _db_cache is not None:
@@ -114,7 +113,7 @@ def get_collection_stats() -> dict:
         return {"preloaded": 0, "uploaded": 0, "total": 0}
 
 
-def get_context_for_query(query: str, source_type: Optional[str] = None) -> List[dict]:
+def get_context_for_query(query: str, source_type: str | None = None) -> list[dict]:
     """Return full context chunks for a query — rich context display."""
     db = _load_store()
     if db is None:
@@ -172,7 +171,7 @@ def clear_uploads():
 _SUPPORTED = {".pdf", ".txt", ".md", ".markdown"}
 
 
-def load_file(path: Path) -> List[Document]:
+def load_file(path: Path) -> list[Document]:
     ext = path.suffix.lower()
     try:
         if ext == ".pdf":
@@ -192,7 +191,7 @@ def load_file(path: Path) -> List[Document]:
 def ingest_documents(
     source_type: str = "preloaded",
     progress_callback=None,
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """
     Ingest documents from the source_type-specific directory.
     source_type: "preloaded" → DATA_DIR, "uploaded" → UPLOAD_DIR.
@@ -204,7 +203,7 @@ def ingest_documents(
     if not directory.exists():
         return 0, 0
 
-    files: List[Path] = [
+    files: list[Path] = [
         f for f in directory.rglob("*") if f.suffix.lower() in _SUPPORTED
     ]
     if not files:
@@ -216,7 +215,7 @@ def ingest_documents(
         separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""],
     )
 
-    all_chunks: List[Document] = []
+    all_chunks: list[Document] = []
     processed = 0
 
     for i, f in enumerate(files):
@@ -253,17 +252,17 @@ def ingest_documents(
 
 
 # ── RAG Chain builder ─────────────────────────────────────────────────────────
-def _format_docs(docs: List[Document]) -> str:
+def _format_docs(docs: list[Document]) -> str:
     parts = []
     for d in docs:
         src = d.metadata.get("source_file", d.metadata.get("source", "unknown"))
         page = d.metadata.get("page", "")
-        header = f"[{src}" + (f" · p.{page+1}" if page != "" else "") + "]"
+        header = f"[{src}" + (f" · p.{page + 1}" if page != "" else "") + "]"
         parts.append(f"{header}\n{d.page_content.strip()}")
     return "\n\n".join(parts)
 
 
-def build_chain(streaming: bool = False, source_type: Optional[str] = None):
+def build_chain(streaming: bool = False, source_type: str | None = None):
     """
     Returns (chain, retriever) or (None, None) if no documents indexed.
     chain accepts a plain string question and returns str (or stream).
@@ -306,7 +305,7 @@ def build_chain(streaming: bool = False, source_type: Optional[str] = None):
     return chain, retriever
 
 
-def get_sources_for_query(query: str, source_type: Optional[str] = None) -> List[dict]:
+def get_sources_for_query(query: str, source_type: str | None = None) -> list[dict]:
     """Return source metadata for a given query (for display)."""
     db = _load_store()
     if db is None:

@@ -16,6 +16,19 @@ repos:
         args: [ --fix ]
       - id: ruff-format
 
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        args: [--config=.flake8]
+
+  - repo: https://github.com/pycqa/pylint
+    rev: v3.2.7
+    hooks:
+      - id: pylint
+        args: [--rcfile=.pylintrc]
+        exclude: tests/
+
   - repo: local
     hooks:
       - id: mypy
@@ -26,12 +39,29 @@ repos:
         pass_filenames: true
         args: [--ignore-missing-imports]
 
-      - id: pytest
-        name: pytest
-        entry: env PYTHONPATH=. myvenv/bin/pytest --cov=. --cov-report=term-missing
+      - id: vulture
+        name: vulture
+        entry: myvenv/bin/vulture
         language: system
         pass_filenames: false
         always_run: true
+        stages: [manual]
+        args: ["--exclude", "myvenv", "--min-confidence", "100", "."]
+
+      - id: pytest
+        name: pytest
+        entry: env PYTHONPATH=. myvenv/bin/pytest --cov=. --cov-report=term-missing --cov-fail-under=20
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: bandit
+        name: bandit
+        entry: myvenv/bin/bandit
+        language: system
+        types: [python]
+        pass_filenames: true
+        args: ["-r", "-ll", "-c", "bandit.yaml"]
 
       - id: pip-audit
         name: pip-audit

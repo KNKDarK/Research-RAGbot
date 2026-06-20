@@ -11,6 +11,13 @@ pypdf>=6.0.0
 unstructured[md]>=0.16.0
 pytest>=8.0.0
 pytest-cov>=5.0.0
+ruff>=0.4.10
 mypy>=1.9.0
 types-requests
+bandit>=1.8.3
+vulture>=2.11
+pylint>=3.2
+flake8>=7.1
+semgrep>=1.94
+pyupgrade>=3.19
 pip-audit>=2.7.3

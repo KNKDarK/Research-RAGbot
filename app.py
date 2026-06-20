@@ -289,9 +289,9 @@ with st.sidebar:
     stats = get_collection_stats()
     st.markdown(
         f'<div style="font-size:0.75rem; color:#64748b;">'
-        f'📖 Preloaded: {stats["preloaded"]} · '
-        f'📤 Uploaded: {stats["uploaded"]} — '
-        f'Total: {stats["total"]} chunks'
+        f"📖 Preloaded: {stats['preloaded']} · "
+        f"📤 Uploaded: {stats['uploaded']} — "
+        f"Total: {stats['total']} chunks"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -579,7 +579,7 @@ if prompt := st.chat_input("Ask something about your documents…"):
                 )
                 st.markdown(
                     f'<div class="source-card">'
-                    f'<strong>📄 {s["file"]}{page_txt}</strong>{tag_html}<br>'
+                    f"<strong>📄 {s['file']}{page_txt}</strong>{tag_html}<br>"
                     f'<span style="font-size:0.75rem;">{s["snippet"]}…</span>'
                     f"</div>",
                     unsafe_allow_html=True,

@@ -1,0 +1,19 @@
+[tool.ruff]
+target-version = "py311"
+extend-exclude = [
+  ".vulture-whitelist.py",
+  "chroma_db",
+  "myvenv",
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+exclude = [
+  "myvenv/",
+  "chroma_db/",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

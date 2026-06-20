@@ -1,0 +1,15 @@
+[MAIN]
+load-plugins =
+ignore = .git,__pycache__,myvenv,.venv
+init-hook =
+jobs = 4
+
+[MESSAGES CONTROL]
+disable = C0114, C0115, C0116, C0301, C0103, C0413, E0401, W0511, W0603, W0212, W0613, W0718, R0903, R0913, R0914, R1705
+
+[FORMAT]
+max-line-length = 88
+
+[REPORTS]
+output-format = text
+score = no

@@ -1,0 +1,15 @@
+skips:
+  - B101  # assert statements (fine in tests)
+  - B311  # random for non-crypto use
+  - B404  # subprocess import
+  - B603  # subprocess without shell=True
+  - B607  # subprocess with partial path
+exclude_dirs:
+  - .git
+  - .mypy_cache
+  - .pytest_cache
+  - .ruff_cache
+  - __pycache__
+  - chroma_db
+  - myvenv
+  - tests
