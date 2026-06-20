@@ -1,3 +1,9 @@
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: always
+
 stages:
   - lint
   - format
@@ -61,6 +67,10 @@ mypy:
 pytest:
   stage: test
   extends: .python-base
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: always
   coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
   script:
     - PYTHONPATH=. pytest --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=20
@@ -87,6 +97,10 @@ bandit:
 pip-audit:
   stage: security
   extends: .python-base
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: always
   script:
     - pip-audit
 
