@@ -1,4 +1,7 @@
 stages:
+  - lint
+  - format
+  - type_check
   - test
   - security
   - secret-detection
@@ -11,8 +14,7 @@ variables:
   SECRET_DETECTION_ENABLED: 'true'
   PIP_CACHE_DIR: ${CI_PROJECT_DIR}/.cache/pip
 
-.python-test:
-  stage: test
+.python-base:
   image: python:3.11-slim
   cache:
     paths:
@@ -21,19 +23,27 @@ variables:
     - python -m pip install --upgrade pip
     - pip install -r requirements.txt
 
-ruff:
-  extends: .python-test
+ruff-lint:
+  stage: lint
+  extends: .python-base
   script:
     - ruff check .
+
+ruff-format:
+  stage: format
+  extends: .python-base
+  script:
     - ruff format --check .
 
 mypy:
-  extends: .python-test
+  stage: type_check
+  extends: .python-base
   script:
     - mypy . --ignore-missing-imports
 
 pytest:
-  extends: .python-test
+  stage: test
+  extends: .python-base
   coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
   script:
     - PYTHONPATH=. pytest --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=20
@@ -48,26 +58,16 @@ pytest:
     expire_in: 1 week
 
 bandit:
-  extends: .python-test
   stage: security
+  extends: .python-base
   script:
     - bandit -r . -ll -c bandit.yaml
 
-pre-commit:
-  stage: test
-  image: python:3.11-slim
-  variables:
-    PRE_COMMIT_HOME: ${CI_PROJECT_DIR}/.cache/pre-commit
-  cache:
-    paths:
-      - .cache/pre-commit
-  before_script:
-    - pip install pre-commit
-    - python -m venv myvenv
-    - source myvenv/bin/activate
-    - pip install -r requirements.txt
+pip-audit:
+  stage: security
+  extends: .python-base
   script:
-    - PYTHONPATH=. pre-commit run --all-files --show-diff-on-failure
+    - pip-audit
 
 secret_detection:
   stage: secret-detection
