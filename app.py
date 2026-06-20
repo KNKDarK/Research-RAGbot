@@ -10,17 +10,19 @@ Beautiful dark-mode interface with:
 import streamlit as st
 from engine import (
     DATA_DIR,
+    UPLOAD_DIR,
     ingest_documents,
     build_chain,
     get_sources_for_query,
     get_doc_count,
-    clear_vector_store,
+    get_collection_stats,
+    clear_uploads,
 )
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="RAG Chatbot · phi4-mini",
-    page_icon="🧠",
+    page_title="Research Assistant · phi4-mini",
+    page_icon="🔬",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -194,6 +196,7 @@ def _init_state():
         "retriever": None,
         "ready": False,
         "last_sources": [],
+        "source_type": "all",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -208,8 +211,8 @@ with st.sidebar:
     st.markdown(
         """
         <div style="text-align:center; margin-bottom:1.2rem;">
-          <div style="font-size:2.5rem; margin-bottom:0.3rem;">🧠</div>
-          <div style="font-weight:700; font-size:1.1rem; color:#a78bfa;">RAG Chatbot</div>
+          <div style="font-size:2.5rem; margin-bottom:0.3rem;">🔬</div>
+          <div style="font-weight:700; font-size:1.1rem; color:#a78bfa;">Research Assistant</div>
           <div style="font-size:0.72rem; color:#64748b; margin-top:2px;">phi4-mini · nomic-embed · ChromaDB</div>
         </div>
         """,
@@ -225,7 +228,7 @@ with st.sidebar:
         )
     with col2:
         st.markdown(
-            '<div class="badge badge-blue">phi4-mini</div>', unsafe_allow_html=True
+            '<div class="badge badge-blue">Research</div>', unsafe_allow_html=True
         )
 
     st.markdown(
@@ -239,10 +242,37 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Document Upload ───────────────────────────────────────────────────────
-    st.markdown("#### 📂 Upload Documents")
+    # ── Source selector ───────────────────────────────────────────────────────
+    st.markdown("#### 🎯 Query Source")
+    source_type = st.radio(
+        "Search in:",
+        options=["all", "preloaded", "uploaded"],
+        format_func={
+            "all": "📚 All papers",
+            "preloaded": "📖 Preloaded papers",
+            "uploaded": "📤 My uploads",
+        }.get,
+        index=0,
+        label_visibility="collapsed",
+    )
+    st.session_state.source_type = source_type
+
+    stats = get_collection_stats()
     st.markdown(
-        '<div style="font-size:0.78rem; color:#64748b; margin-bottom:0.5rem;">Supports PDF, TXT, MD</div>',
+        f'<div style="font-size:0.75rem; color:#64748b;">'
+        f'📖 Preloaded: {stats["preloaded"]} · '
+        f'📤 Uploaded: {stats["uploaded"]} — '
+        f'Total: {stats["total"]} chunks'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
+
+    # ── Document Upload ───────────────────────────────────────────────────────
+    st.markdown("#### 📤 Upload Your Papers")
+    st.markdown(
+        '<div style="font-size:0.78rem; color:#64748b; margin-bottom:0.5rem;">PDF, TXT, MD — saved separately from preloaded papers</div>',
         unsafe_allow_html=True,
     )
 
@@ -254,15 +284,13 @@ with st.sidebar:
     )
 
     if uploaded_files:
-        if st.button("📥 Ingest Documents", use_container_width=True):
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-            temp_paths = []
+        if st.button("📥 Ingest Uploads", use_container_width=True):
+            UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
             with st.spinner("Saving files…"):
                 for uf in uploaded_files:
-                    dest = DATA_DIR / uf.name
+                    dest = UPLOAD_DIR / uf.name
                     dest.write_bytes(uf.getbuffer())
-                    temp_paths.append(dest)
 
             progress_bar = st.progress(0, text="Chunking & embedding…")
 
@@ -273,14 +301,14 @@ with st.sidebar:
                 )
 
             n_files, n_chunks = ingest_documents(
-                directory=DATA_DIR, progress_callback=_cb
+                source_type="uploaded", progress_callback=_cb
             )
             progress_bar.empty()
 
             if n_chunks > 0:
                 st.success(f"✅ {n_files} file(s) → {n_chunks} chunks indexed!")
                 st.session_state.chain, st.session_state.retriever = build_chain(
-                    streaming=True
+                    streaming=True, source_type=st.session_state.source_type
                 )
                 st.session_state.doc_count = get_doc_count()
                 st.session_state.ready = st.session_state.chain is not None
@@ -300,12 +328,6 @@ with st.sidebar:
             f'<div class="badge badge-green">✅ {doc_count} chunks indexed</div>',
             unsafe_allow_html=True,
         )
-        # Auto-build chain if not built yet
-        if st.session_state.chain is None:
-            st.session_state.chain, st.session_state.retriever = build_chain(
-                streaming=True
-            )
-            st.session_state.ready = st.session_state.chain is not None
     else:
         st.markdown(
             '<div class="badge badge-yellow">⚠ No documents yet</div>',
@@ -314,18 +336,35 @@ with st.sidebar:
 
     st.markdown("")
 
-    col_clr, col_chat = st.columns(2)
-    with col_clr:
-        if st.button("🗑 Clear DB", use_container_width=True):
-            clear_vector_store()
-            st.session_state.chain = None
-            st.session_state.retriever = None
-            st.session_state.ready = False
-            st.session_state.doc_count = 0
-            st.success("Vector store cleared.")
+    col_pre, col_up, col_chat = st.columns(3)
+    with col_pre:
+        if st.button("📖 Re-ingest\npreloaded", use_container_width=True):
+            progress_bar = st.progress(0, text="Re-ingesting preloaded…")
+
+            def _cb(i, total, name):
+                progress_bar.progress(
+                    int((i + 1) / total * 100), text=f"Processing: {name}"
+                )
+
+            ingest_documents(source_type="preloaded", progress_callback=_cb)
+            progress_bar.empty()
+            st.session_state.chain, st.session_state.retriever = build_chain(
+                streaming=True, source_type=st.session_state.source_type
+            )
+            st.session_state.doc_count = get_doc_count()
+            st.session_state.ready = st.session_state.chain is not None
+            st.rerun()
+    with col_up:
+        if st.button("🗑 Clear\nuploads", use_container_width=True):
+            clear_uploads()
+            st.session_state.chain, st.session_state.retriever = build_chain(
+                streaming=True, source_type=st.session_state.source_type
+            )
+            st.session_state.doc_count = get_doc_count()
+            st.session_state.ready = st.session_state.chain is not None
             st.rerun()
     with col_chat:
-        if st.button("💬 New Chat", use_container_width=True):
+        if st.button("💬 New\nChat", use_container_width=True):
             st.session_state.messages = []
             st.session_state.last_sources = []
             st.rerun()
@@ -350,12 +389,23 @@ with st.sidebar:
 st.markdown(
     """
     <div class="rag-header">
-      <h1>🧠 RAG Chatbot</h1>
-      <p>Upload documents in the sidebar, then chat with your data — 100% local, GPU-accelerated.</p>
+      <h1>🔬 Academic Research Assistant</h1>
+      <p>Upload research papers in the sidebar, then ask questions about them — 100% local, GPU-accelerated.</p>
     </div>
     """,
     unsafe_allow_html=True,
 )
+
+# ── Auto-ingest preloaded papers if empty ─────────────────────────────────────
+if get_doc_count() == 0:
+    preloaded_files = list(DATA_DIR.rglob("*")) if DATA_DIR.exists() else []
+    has_preloaded = any(
+        f.suffix.lower() in {".pdf", ".txt", ".md", ".markdown"}
+        for f in preloaded_files
+    )
+    if has_preloaded:
+        with st.spinner("📖 Auto-ingesting preloaded research papers…"):
+            ingest_documents(source_type="preloaded")
 
 # ── Guard: no documents ────────────────────────────────────────────────────────
 if not st.session_state.ready and get_doc_count() == 0:
@@ -371,11 +421,11 @@ if not st.session_state.ready and get_doc_count() == 0:
         ">
           <div style="font-size:3.5rem; margin-bottom:1rem;">📄</div>
           <div style="font-size:1.15rem; font-weight:600; color:#a78bfa; margin-bottom:0.5rem;">
-            No Documents Yet
+            No Research Papers Yet
           </div>
           <div style="color:#64748b; font-size:0.88rem; max-width:420px; margin:0 auto;">
-            Upload PDFs, TXT or Markdown files using the sidebar to build your knowledge base.
-            The chatbot will answer questions based on your documents only.
+            Upload PDF research papers using the sidebar to build your knowledge base.
+            The assistant answers questions based on your uploaded papers only.
           </div>
         </div>
         """,
@@ -386,7 +436,9 @@ if not st.session_state.ready and get_doc_count() == 0:
 # ── Ensure chain is ready ─────────────────────────────────────────────────────
 if st.session_state.chain is None:
     with st.spinner("Loading model…"):
-        st.session_state.chain, st.session_state.retriever = build_chain(streaming=True)
+        st.session_state.chain, st.session_state.retriever = build_chain(
+            streaming=True, source_type=st.session_state.source_type
+        )
         st.session_state.ready = st.session_state.chain is not None
 
 # ── Chat history display ───────────────────────────────────────────────────────
@@ -400,7 +452,7 @@ for msg in st.session_state.messages:
         )
     else:
         st.markdown(
-            f'<div class="chat-label label-ai">🧠 phi4-mini</div>'
+            f'<div class="chat-label label-ai">🔬 Research Assistant</div>'
             f'<div class="chat-bubble-ai">{msg["content"]}</div>',
             unsafe_allow_html=True,
         )
@@ -408,10 +460,14 @@ for msg in st.session_state.messages:
         if show_sources and msg.get("sources"):
             with st.expander("📎 Sources", expanded=False):
                 for s in msg["sources"]:
-                    page_txt = f" · page {s['page']}" if s.get("page") else ""
+                    page_txt = f" · p. {s['page']}" if s.get("page") else ""
+                    tag = s.get("source_type", "")
+                    tag_html = (
+                        f' <span class="badge badge-blue">{tag}</span>' if tag else ""
+                    )
                     st.markdown(
                         f'<div class="source-card">'
-                        f'<strong>📄 {s["file"]}{page_txt}</strong><br>'
+                        f'<strong>📄 {s["file"]}{page_txt}</strong>{tag_html}<br>'
                         f'<span style="font-size:0.75rem;">{s["snippet"]}…</span>'
                         f"</div>",
                         unsafe_allow_html=True,
@@ -430,11 +486,12 @@ if prompt := st.chat_input("Ask something about your documents…"):
     # Retrieve sources for citation (parallel, non-streaming)
     sources = []
     if show_sources:
-        sources = get_sources_for_query(prompt)
+        sources = get_sources_for_query(prompt, st.session_state.source_type)
 
     # Stream the LLM response
     st.markdown(
-        '<div class="chat-label label-ai">🧠 phi4-mini</div>', unsafe_allow_html=True
+        '<div class="chat-label label-ai">🔬 Research Assistant</div>',
+        unsafe_allow_html=True,
     )
     response_box = st.empty()
     full_response = ""
@@ -460,10 +517,14 @@ if prompt := st.chat_input("Ask something about your documents…"):
     if show_sources and sources:
         with st.expander("📎 Sources", expanded=True):
             for s in sources:
-                page_txt = f" · page {s['page']}" if s.get("page") else ""
+                page_txt = f" · p. {s['page']}" if s.get("page") else ""
+                tag = s.get("source_type", "")
+                tag_html = (
+                    f' <span class="badge badge-blue">{tag}</span>' if tag else ""
+                )
                 st.markdown(
                     f'<div class="source-card">'
-                    f'<strong>📄 {s["file"]}{page_txt}</strong><br>'
+                    f'<strong>📄 {s["file"]}{page_txt}</strong>{tag_html}<br>'
                     f'<span style="font-size:0.75rem;">{s["snippet"]}…</span>'
                     f"</div>",
                     unsafe_allow_html=True,
