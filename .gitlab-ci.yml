@@ -1,4 +1,5 @@
 stages:
+  - build
   - lint
   - format
   - type_check
@@ -12,18 +13,29 @@ include:
 
 variables:
   SECRET_DETECTION_ENABLED: 'true'
-  PIP_CACHE_DIR: ${CI_PROJECT_DIR}/.cache/pip
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ''
 
 .python-base:
-  image: python:3.11-slim
-  cache:
-    key: ${CI_COMMIT_REF_SLUG}
-    paths:
-      - .cache/pip
-  before_script:
-    - python -m pip install --upgrade pip
-    - pip install -r requirements.txt
+  image: ${CI_REGISTRY_IMAGE}/ci:latest
   interruptible: true
+
+build-ci-image:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE/ci:latest -f ci.Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE/ci:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - requirements.txt
+        - ci.Dockerfile
+      when: always
+    - when: never
 
 ruff-lint:
   stage: lint
