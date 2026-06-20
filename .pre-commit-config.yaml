@@ -28,7 +28,15 @@ repos:
 
       - id: pytest
         name: pytest
-        entry: env PYTHONPATH=. myvenv/bin/pytest
+        entry: env PYTHONPATH=. myvenv/bin/pytest --cov=. --cov-report=term-missing
         language: system
         pass_filenames: false
         always_run: true
+
+      - id: pip-audit
+        name: pip-audit
+        entry: myvenv/bin/pip-audit
+        language: system
+        pass_filenames: false
+        always_run: true
+        args: [ "--ignore-vuln", "CVE-2026-45829" ]

@@ -10,5 +10,7 @@ ollama>=0.6.0
 pypdf>=6.0.0
 unstructured[md]>=0.16.0
 pytest>=8.0.0
+pytest-cov>=5.0.0
 mypy>=1.9.0
 types-requests
+pip-audit>=2.7.3
