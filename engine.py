@@ -31,7 +31,8 @@ from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 from langchain_core.documents import Document
 
 # ── Config ────────────────────────────────────────────────────────────────────
-DATA_DIR = Path("./data")
+DATA_DIR = Path("./data")  # pre-downloaded / bundled papers
+UPLOAD_DIR = Path("./uploads")  # user-uploaded papers
 CHROMA_DIR = Path("./chroma_db")
 EMBED_MODEL = "nomic-embed-text"
 LLM_MODEL = "phi4-mini"
@@ -44,17 +45,18 @@ MMR_LAMBDA = 0.65  # diversity vs relevance (0=max diversity, 1=max relevance)
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 RAG_PROMPT = ChatPromptTemplate.from_template(
-    """You are a knowledgeable assistant. Use ONLY the context below to answer.
-If the answer is not in the context, say "I don't have enough information in the \
-uploaded documents to answer that."
+    """You are an expert Scientific Research Assistant. Use the following pieces of \
+retrieved context to answer the question at the end.
+If you don't know the answer, say that you don't know based on the documents—do not \
+try to make up an answer.
+Always structure your answer clearly with bullet points and reference the paper or \
+author if mentioned in the context.
 
---- CONTEXT ---
+Context:
 {context}
---------------
 
 Question: {question}
-
-Provide a clear, concise, accurate answer. Cite the document source when relevant."""
+Helpful Answer:"""
 )
 
 # ── Embeddings (singleton) ────────────────────────────────────────────────────
@@ -85,11 +87,39 @@ def get_doc_count() -> int:
         return 0
 
 
+def get_collection_stats() -> dict:
+    """Return per-source_type chunk counts."""
+    db = _load_store()
+    if db is None:
+        return {"preloaded": 0, "uploaded": 0, "total": 0}
+    try:
+        col = db._collection
+        total = col.count()
+        pre = len(col.get(where={"source_type": "preloaded"})["ids"])
+        up = len(col.get(where={"source_type": "uploaded"})["ids"])
+        return {"preloaded": pre, "uploaded": up, "total": total}
+    except Exception:
+        return {"preloaded": 0, "uploaded": 0, "total": 0}
+
+
 def clear_vector_store():
     """Wipe ChromaDB to start fresh."""
     if CHROMA_DIR.exists():
         shutil.rmtree(CHROMA_DIR)
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def clear_uploads():
+    """Wipe only the uploaded chunks and the uploads directory."""
+    db = _load_store()
+    if db:
+        try:
+            db._collection.delete(where={"source_type": "uploaded"})
+        except Exception:
+            pass
+    if UPLOAD_DIR.exists():
+        shutil.rmtree(UPLOAD_DIR)
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ── Document loaders ──────────────────────────────────────────────────────────
@@ -114,27 +144,23 @@ def load_file(path: Path) -> List[Document]:
 
 
 def ingest_documents(
-    directory: Optional[Path] = None,
-    extra_files: Optional[List[Path]] = None,
-    reset: bool = False,
+    source_type: str = "preloaded",
     progress_callback=None,
 ) -> Tuple[int, int]:
     """
-    Ingest documents from `directory` and/or `extra_files`.
+    Ingest documents from the source_type-specific directory.
+    source_type: "preloaded" → DATA_DIR, "uploaded" → UPLOAD_DIR.
+    Old chunks of the same source_type are replaced to avoid duplicates.
     Returns (num_files_processed, num_chunks_added).
     """
-    if reset:
-        clear_vector_store()
+    directory = DATA_DIR if source_type == "preloaded" else UPLOAD_DIR
 
-    directory = directory or DATA_DIR
-    files: List[Path] = []
+    if not directory.exists():
+        return 0, 0
 
-    if directory.exists():
-        files += [f for f in directory.rglob("*") if f.suffix.lower() in _SUPPORTED]
-
-    if extra_files:
-        files += extra_files
-
+    files: List[Path] = [
+        f for f in directory.rglob("*") if f.suffix.lower() in _SUPPORTED
+    ]
     if not files:
         return 0, 0
 
@@ -153,21 +179,28 @@ def ingest_documents(
         docs = load_file(f)
         if docs:
             chunks = splitter.split_documents(docs)
-            # Tag each chunk with source filename
             for c in chunks:
                 c.metadata["source_file"] = f.name
+                c.metadata["source_type"] = source_type
             all_chunks.extend(chunks)
             processed += 1
 
     if not all_chunks:
         return 0, 0
 
-    # Upsert into ChromaDB
-    Chroma.from_documents(
-        all_chunks,
-        _embeddings,
-        persist_directory=str(CHROMA_DIR),
-    )
+    db = _load_store()
+    if db:
+        try:
+            db._collection.delete(where={"source_type": source_type})
+        except Exception:
+            pass
+        db.add_documents(all_chunks)
+    else:
+        Chroma.from_documents(
+            all_chunks,
+            _embeddings,
+            persist_directory=str(CHROMA_DIR),
+        )
 
     return processed, len(all_chunks)
 
@@ -183,22 +216,27 @@ def _format_docs(docs: List[Document]) -> str:
     return "\n\n".join(parts)
 
 
-def build_chain(streaming: bool = False):
+def build_chain(streaming: bool = False, source_type: Optional[str] = None):
     """
     Returns (chain, retriever) or (None, None) if no documents indexed.
     chain accepts a plain string question and returns str (or stream).
+    Pass source_type="preloaded" / "uploaded" to filter retrieval.
     """
     db = _load_store()
     if db is None:
         return None, None
 
+    search_kwargs: dict = {
+        "k": RETRIEVER_K,
+        "fetch_k": FETCH_K,
+        "lambda_mult": MMR_LAMBDA,
+    }
+    if source_type:
+        search_kwargs["filter"] = {"source_type": source_type}
+
     retriever = db.as_retriever(
         search_type="mmr",
-        search_kwargs={
-            "k": RETRIEVER_K,
-            "fetch_k": FETCH_K,
-            "lambda_mult": MMR_LAMBDA,
-        },
+        search_kwargs=search_kwargs,
     )
 
     llm = ChatOllama(
@@ -221,15 +259,19 @@ def build_chain(streaming: bool = False):
     return chain, retriever
 
 
-def get_sources_for_query(query: str) -> List[dict]:
+def get_sources_for_query(query: str, source_type: Optional[str] = None) -> List[dict]:
     """Return source metadata for a given query (for display)."""
     db = _load_store()
     if db is None:
         return []
-    retriever = db.as_retriever(
-        search_type="mmr",
-        search_kwargs={"k": RETRIEVER_K, "fetch_k": FETCH_K, "lambda_mult": MMR_LAMBDA},
-    )
+    search_kwargs: dict = {
+        "k": RETRIEVER_K,
+        "fetch_k": FETCH_K,
+        "lambda_mult": MMR_LAMBDA,
+    }
+    if source_type:
+        search_kwargs["filter"] = {"source_type": source_type}
+    retriever = db.as_retriever(search_type="mmr", search_kwargs=search_kwargs)
     docs = retriever.invoke(query)
     seen, sources = set(), []
     for d in docs:
@@ -243,6 +285,7 @@ def get_sources_for_query(query: str) -> List[dict]:
                     "file": src,
                     "page": int(page) + 1 if page != "" else None,
                     "snippet": d.page_content[:180].replace("\n", " "),
+                    "source_type": d.metadata.get("source_type", ""),
                 }
             )
     return sources
