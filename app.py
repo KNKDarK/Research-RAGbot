@@ -14,6 +14,7 @@ from engine import (
     ingest_documents,
     build_chain,
     get_sources_for_query,
+    get_context_for_query,
     get_doc_count,
     get_collection_stats,
     clear_uploads,
@@ -137,6 +138,32 @@ html, body, [class*="css"] {
 }
 .source-card strong { color: #a5b4fc; }
 
+/* ── Context panel ───────────────────────────────────── */
+.context-card {
+    background: rgba(15,23,42,0.85);
+    border: 1px solid rgba(139,92,246,0.25);
+    border-left: 4px solid #8b5cf6;
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    margin: 0.6rem 0;
+    font-size: 0.82rem;
+    color: #cbd5e1;
+    line-height: 1.65;
+}
+.context-card .ctx-header {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #a78bfa;
+    margin-bottom: 0.4rem;
+}
+.context-card .ctx-text {
+    color: #e2e8f0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 /* ── Upload area ──────────────────────────────────────── */
 [data-testid="stFileUploader"] {
     border: 2px dashed rgba(99,102,241,0.4) !important;
@@ -196,7 +223,9 @@ def _init_state():
         "retriever": None,
         "ready": False,
         "last_sources": [],
+        "last_context": [],
         "source_type": "all",
+        "show_context": True,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -367,6 +396,7 @@ with st.sidebar:
         if st.button("💬 New\nChat", use_container_width=True):
             st.session_state.messages = []
             st.session_state.last_sources = []
+            st.session_state.last_context = []
             st.rerun()
 
     st.divider()
@@ -374,6 +404,7 @@ with st.sidebar:
     # ── Settings ──────────────────────────────────────────────────────────────
     with st.expander("⚙️ Settings", expanded=False):
         show_sources = st.toggle("Show source citations", value=True)
+        st.session_state.show_context = st.toggle("Show retrieved context", value=True)
         st.caption("GPU: AMD RX 6500M (RDNA2)")
         st.caption("HSA_GFX: 10.3.0 (gfx1034)")
         st.caption("ctx window: 4096 tokens")
@@ -456,19 +487,19 @@ for msg in st.session_state.messages:
             f'<div class="chat-bubble-ai">{msg["content"]}</div>',
             unsafe_allow_html=True,
         )
-        # Show sources if stored
-        if show_sources and msg.get("sources"):
-            with st.expander("📎 Sources", expanded=False):
-                for s in msg["sources"]:
-                    page_txt = f" · p. {s['page']}" if s.get("page") else ""
-                    tag = s.get("source_type", "")
+        # Show context if stored
+        if msg.get("context"):
+            with st.expander("📖 Retrieved Context", expanded=False):
+                for c in msg["context"]:
+                    page_txt = f" · p. {c['page']}" if c.get("page") else ""
+                    tag = c.get("source_type", "")
                     tag_html = (
                         f' <span class="badge badge-blue">{tag}</span>' if tag else ""
                     )
                     st.markdown(
-                        f'<div class="source-card">'
-                        f'<strong>📄 {s["file"]}{page_txt}</strong>{tag_html}<br>'
-                        f'<span style="font-size:0.75rem;">{s["snippet"]}…</span>'
+                        f'<div class="context-card">'
+                        f'<div class="ctx-header">📄 {c["file"]}{page_txt}{tag_html}</div>'
+                        f'<div class="ctx-text">{c["content"]}</div>'
                         f"</div>",
                         unsafe_allow_html=True,
                     )
@@ -483,10 +514,34 @@ if prompt := st.chat_input("Ask something about your documents…"):
         unsafe_allow_html=True,
     )
 
-    # Retrieve sources for citation (parallel, non-streaming)
+    # Retrieve context & sources (parallel, non-streaming)
     sources = []
-    if show_sources:
-        sources = get_sources_for_query(prompt, st.session_state.source_type)
+    context_chunks = []
+    if show_sources or st.session_state.show_context:
+        source_type_filter = (
+            st.session_state.source_type
+            if st.session_state.source_type != "all"
+            else None
+        )
+        context_chunks = get_context_for_query(prompt, source_type_filter)
+        sources = get_sources_for_query(prompt, source_type_filter)
+
+    # Show context expander first (before the answer)
+    if st.session_state.show_context and context_chunks:
+        with st.expander("📖 Retrieved Context", expanded=True):
+            for c in context_chunks:
+                page_txt = f" · p. {c['page']}" if c.get("page") else ""
+                tag = c.get("source_type", "")
+                tag_html = (
+                    f' <span class="badge badge-blue">{tag}</span>' if tag else ""
+                )
+                st.markdown(
+                    f'<div class="context-card">'
+                    f'<div class="ctx-header">📄 {c["file"]}{page_txt}{tag_html}</div>'
+                    f'<div class="ctx-text">{c["content"]}</div>'
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
     # Stream the LLM response
     st.markdown(
@@ -532,5 +587,10 @@ if prompt := st.chat_input("Ask something about your documents…"):
 
     # Persist to history
     st.session_state.messages.append(
-        {"role": "assistant", "content": full_response, "sources": sources}
+        {
+            "role": "assistant",
+            "content": full_response,
+            "sources": sources,
+            "context": context_chunks,
+        }
     )

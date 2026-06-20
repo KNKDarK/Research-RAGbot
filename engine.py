@@ -62,19 +62,31 @@ Helpful Answer:"""
 # ── Embeddings (singleton) ────────────────────────────────────────────────────
 _embeddings = OllamaEmbeddings(model=EMBED_MODEL)
 
+# ── ChromaDB cache (avoid reloading from disk) ───────────────────────────────
+_db_cache: Optional[Chroma] = None
 
-# ── Vector store helpers ──────────────────────────────────────────────────────
+
 def _load_store() -> Optional[Chroma]:
-    """Load existing ChromaDB if it has data."""
+    """Load existing ChromaDB if it has data (cached after first load)."""
+    global _db_cache
+    if _db_cache is not None:
+        return _db_cache
     if CHROMA_DIR.exists():
         db = Chroma(persist_directory=str(CHROMA_DIR), embedding_function=_embeddings)
         try:
             count = db._collection.count()
             if count > 0:
+                _db_cache = db
                 return db
         except Exception:
             pass
     return None
+
+
+def _invalidate_cache():
+    """Drop the cached ChromaDB handle (call after writes)."""
+    global _db_cache
+    _db_cache = None
 
 
 def get_doc_count() -> int:
@@ -102,8 +114,41 @@ def get_collection_stats() -> dict:
         return {"preloaded": 0, "uploaded": 0, "total": 0}
 
 
+def get_context_for_query(query: str, source_type: Optional[str] = None) -> List[dict]:
+    """Return full context chunks for a query — rich context display."""
+    db = _load_store()
+    if db is None:
+        return []
+    search_kwargs: dict = {
+        "k": RETRIEVER_K,
+        "fetch_k": FETCH_K,
+        "lambda_mult": MMR_LAMBDA,
+    }
+    if source_type and source_type != "all":
+        search_kwargs["filter"] = {"source_type": source_type}
+    retriever = db.as_retriever(search_type="mmr", search_kwargs=search_kwargs)
+    docs = retriever.invoke(query)
+    seen, chunks = set(), []
+    for d in docs:
+        src = d.metadata.get("source_file", d.metadata.get("source", "?"))
+        page = d.metadata.get("page", "")
+        key = f"{src}:{page}"
+        if key not in seen:
+            seen.add(key)
+            chunks.append(
+                {
+                    "file": src,
+                    "page": int(page) + 1 if page != "" else None,
+                    "content": d.page_content.strip(),
+                    "source_type": d.metadata.get("source_type", ""),
+                }
+            )
+    return chunks
+
+
 def clear_vector_store():
     """Wipe ChromaDB to start fresh."""
+    _invalidate_cache()
     if CHROMA_DIR.exists():
         shutil.rmtree(CHROMA_DIR)
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
@@ -111,6 +156,7 @@ def clear_vector_store():
 
 def clear_uploads():
     """Wipe only the uploaded chunks and the uploads directory."""
+    _invalidate_cache()
     db = _load_store()
     if db:
         try:
@@ -188,6 +234,7 @@ def ingest_documents(
     if not all_chunks:
         return 0, 0
 
+    _invalidate_cache()
     db = _load_store()
     if db:
         try:
