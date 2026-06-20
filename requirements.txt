@@ -17,7 +17,6 @@ types-requests
 bandit>=1.8.3
 vulture>=2.11
 pylint>=3.2
-flake8>=7.1
 semgrep>=1.94
 pyupgrade>=3.19
 pip-audit>=2.7.3

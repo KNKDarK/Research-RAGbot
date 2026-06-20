@@ -1,6 +1,5 @@
 stages:
   - lint
-  - format
   - type_check
   - test
   - security
@@ -23,16 +22,11 @@ variables:
     - python -m pip install --upgrade pip
     - pip install -r requirements.txt
 
-ruff-lint:
+ruff:
   stage: lint
   extends: .python-base
   script:
     - ruff check .
-
-ruff-format:
-  stage: format
-  extends: .python-base
-  script:
     - ruff format --check .
 
 mypy:
