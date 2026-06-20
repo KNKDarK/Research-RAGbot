@@ -1,3 +1,14 @@
+[project]
+name = "rag-chat-bot"
+version = "1.0.0"
+description = "Local Streamlit RAG research assistant for querying uploaded and preloaded documents with Ollama, LangChain, and ChromaDB."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "AGPL-3.0-only"
+
+[project.urls]
+Repository = "git@ssh.code.swecha.org:ssmk/rag-chat-bot.git"
+
 [tool.ruff]
 target-version = "py311"
 extend-exclude = [

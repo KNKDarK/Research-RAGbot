@@ -20,7 +20,7 @@
 - [x] Add task tracking.
 
 ## Verification
-- [ ] `ruff check .`
-- [ ] `ruff format --check .`
-- [ ] `mypy . --ignore-missing-imports`
-- [ ] `pytest --cov=. --cov-report=term-missing --cov-fail-under=20`
+- [x] `ruff check .`
+- [x] `ruff format --check .`
+- [x] `mypy . --ignore-missing-imports`
+- [x] `pytest --cov=. --cov-report=term-missing --cov-fail-under=20`
