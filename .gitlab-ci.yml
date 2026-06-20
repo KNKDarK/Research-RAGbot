@@ -17,6 +17,7 @@ include:
 variables:
   SECRET_DETECTION_ENABLED: 'true'
   PIP_CACHE_DIR: ${CI_PROJECT_DIR}/.cache/pip
+  VENV_DIR: ${CI_PROJECT_DIR}/.venv
 
 .python-base:
   image: python:3.11-slim
@@ -27,9 +28,20 @@ variables:
       prefix: pip
     paths:
       - .cache/pip
+      - .venv
   before_script:
-    - pip install --upgrade pip --quiet
-    - pip install -r requirements.txt --quiet
+    - |
+      if command -v python3 >/dev/null; then
+        PYTHON_BIN=python3
+      elif command -v python >/dev/null; then
+        PYTHON_BIN=python
+      else
+        echo "python3 or python is required on the shell runner"
+        exit 1
+      fi
+      "$PYTHON_BIN" -m venv "$VENV_DIR"
+    - ${VENV_DIR}/bin/python -m pip install --upgrade pip --quiet
+    - ${VENV_DIR}/bin/python -m pip install -r requirements.txt --quiet
   interruptible: true
 
 tag-pipeline:
@@ -50,7 +62,7 @@ ruff-lint:
       when: never
     - when: always
   script:
-    - ruff check .
+    - ${VENV_DIR}/bin/ruff check .
 
 ruff-format:
   stage: format
@@ -60,7 +72,7 @@ ruff-format:
       when: never
     - when: always
   script:
-    - ruff format --check .
+    - ${VENV_DIR}/bin/ruff format --check .
 
 mypy:
   stage: type_check
@@ -70,7 +82,7 @@ mypy:
       when: never
     - when: always
   script:
-    - mypy . --ignore-missing-imports
+    - ${VENV_DIR}/bin/mypy . --ignore-missing-imports
 
 pytest:
   stage: test
@@ -81,7 +93,7 @@ pytest:
     - when: always
   coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
   script:
-    - PYTHONPATH=. pytest --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=20
+    - PYTHONPATH=. ${VENV_DIR}/bin/pytest --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=20
   artifacts:
     when: always
     reports:
@@ -100,7 +112,7 @@ bandit:
       when: never
     - when: always
   script:
-    - bandit -r . -ll -c bandit.yaml
+    - ${VENV_DIR}/bin/bandit -r . -ll -c bandit.yaml
 
 pip-audit:
   stage: security
@@ -110,7 +122,7 @@ pip-audit:
       when: never
     - when: always
   script:
-    - pip-audit
+    - ${VENV_DIR}/bin/pip-audit
 
 sast:
   rules:
