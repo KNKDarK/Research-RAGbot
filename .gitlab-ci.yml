@@ -15,7 +15,6 @@ variables:
   PIP_CACHE_DIR: ${CI_PROJECT_DIR}/.cache/pip
 
 .python-base:
-  tags: [swecha]
   image: python:3.11-slim
   cache:
     key:
@@ -92,14 +91,12 @@ pip-audit:
     - pip-audit
 
 sast:
-  tags: [swecha]
   rules:
     - if: $CI_COMMIT_TAG
       when: never
     - when: always
 
 secret_detection:
-  tags: [swecha]
   rules:
     - if: $CI_COMMIT_TAG
       when: never
