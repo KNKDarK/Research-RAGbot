@@ -7,6 +7,8 @@ Beautiful dark-mode interface with:
   • Document management
 """
 
+import html
+
 import streamlit as st
 from engine import (
     DATA_DIR,
@@ -226,6 +228,7 @@ def _init_state():
         "last_context": [],
         "source_type": "all",
         "show_context": True,
+        "show_sources": True,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -403,7 +406,9 @@ with st.sidebar:
 
     # ── Settings ──────────────────────────────────────────────────────────────
     with st.expander("⚙️ Settings", expanded=False):
-        show_sources = st.toggle("Show source citations", value=True)
+        st.session_state.show_sources = st.toggle(
+            "Show source citations", value=st.session_state.show_sources
+        )
         st.session_state.show_context = st.toggle("Show retrieved context", value=True)
         st.caption("GPU: AMD RX 6500M (RDNA2)")
         st.caption("HSA_GFX: 10.3.0 (gfx1034)")
@@ -478,13 +483,13 @@ for msg in st.session_state.messages:
     if role == "user":
         st.markdown(
             f'<div class="chat-label label-user">You</div>'
-            f'<div class="chat-bubble-user">{msg["content"]}</div>',
+            f'<div class="chat-bubble-user">{html.escape(msg["content"])}</div>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
             f'<div class="chat-label label-ai">🔬 Research Assistant</div>'
-            f'<div class="chat-bubble-ai">{msg["content"]}</div>',
+            f'<div class="chat-bubble-ai">{html.escape(msg["content"])}</div>',
             unsafe_allow_html=True,
         )
         # Show context if stored
@@ -494,12 +499,14 @@ for msg in st.session_state.messages:
                     page_txt = f" · p. {c['page']}" if c.get("page") else ""
                     tag = c.get("source_type", "")
                     tag_html = (
-                        f' <span class="badge badge-blue">{tag}</span>' if tag else ""
+                        f' <span class="badge badge-blue">{html.escape(tag)}</span>'
+                        if tag
+                        else ""
                     )
                     st.markdown(
                         f'<div class="context-card">'
-                        f'<div class="ctx-header">📄 {c["file"]}{page_txt}{tag_html}</div>'
-                        f'<div class="ctx-text">{c["content"]}</div>'
+                        f'<div class="ctx-header">📄 {html.escape(c["file"])}{page_txt}{tag_html}</div>'
+                        f'<div class="ctx-text">{html.escape(c["content"])}</div>'
                         f"</div>",
                         unsafe_allow_html=True,
                     )
@@ -510,14 +517,14 @@ if prompt := st.chat_input("Ask something about your documents…"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.markdown(
         f'<div class="chat-label label-user">You</div>'
-        f'<div class="chat-bubble-user">{prompt}</div>',
+        f'<div class="chat-bubble-user">{html.escape(prompt)}</div>',
         unsafe_allow_html=True,
     )
 
     # Retrieve context & sources (parallel, non-streaming)
     sources = []
     context_chunks = []
-    if show_sources or st.session_state.show_context:
+    if st.session_state.show_sources or st.session_state.show_context:
         source_type_filter = (
             st.session_state.source_type
             if st.session_state.source_type != "all"
@@ -533,12 +540,14 @@ if prompt := st.chat_input("Ask something about your documents…"):
                 page_txt = f" · p. {c['page']}" if c.get("page") else ""
                 tag = c.get("source_type", "")
                 tag_html = (
-                    f' <span class="badge badge-blue">{tag}</span>' if tag else ""
+                    f' <span class="badge badge-blue">{html.escape(tag)}</span>'
+                    if tag
+                    else ""
                 )
                 st.markdown(
                     f'<div class="context-card">'
-                    f'<div class="ctx-header">📄 {c["file"]}{page_txt}{tag_html}</div>'
-                    f'<div class="ctx-text">{c["content"]}</div>'
+                    f'<div class="ctx-header">📄 {html.escape(c["file"])}{page_txt}{tag_html}</div>'
+                    f'<div class="ctx-text">{html.escape(c["content"])}</div>'
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -556,12 +565,12 @@ if prompt := st.chat_input("Ask something about your documents…"):
             for chunk in st.session_state.chain.stream(prompt):
                 full_response += chunk
                 response_box.markdown(
-                    f'<div class="chat-bubble-ai">{full_response}▌</div>',
+                    f'<div class="chat-bubble-ai">{html.escape(full_response)}▌</div>',
                     unsafe_allow_html=True,
                 )
         # Final (remove cursor)
         response_box.markdown(
-            f'<div class="chat-bubble-ai">{full_response}</div>',
+            f'<div class="chat-bubble-ai">{html.escape(full_response)}</div>',
             unsafe_allow_html=True,
         )
     except Exception as e:
@@ -569,18 +578,20 @@ if prompt := st.chat_input("Ask something about your documents…"):
         response_box.error(full_response)
 
     # Show sources inline
-    if show_sources and sources:
+    if st.session_state.show_sources and sources:
         with st.expander("📎 Sources", expanded=True):
             for s in sources:
                 page_txt = f" · p. {s['page']}" if s.get("page") else ""
                 tag = s.get("source_type", "")
                 tag_html = (
-                    f' <span class="badge badge-blue">{tag}</span>' if tag else ""
+                    f' <span class="badge badge-blue">{html.escape(tag)}</span>'
+                    if tag
+                    else ""
                 )
                 st.markdown(
                     f'<div class="source-card">'
-                    f"<strong>📄 {s['file']}{page_txt}</strong>{tag_html}<br>"
-                    f'<span style="font-size:0.75rem;">{s["snippet"]}…</span>'
+                    f"<strong>📄 {html.escape(s['file'])}{page_txt}</strong>{tag_html}<br>"
+                    f'<span style="font-size:0.75rem;">{html.escape(s["snippet"])}…</span>'
                     f"</div>",
                     unsafe_allow_html=True,
                 )

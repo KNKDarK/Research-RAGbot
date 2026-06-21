@@ -73,7 +73,7 @@ def _load_store() -> Chroma | None:
     if CHROMA_DIR.exists():
         db = Chroma(persist_directory=str(CHROMA_DIR), embedding_function=_embeddings)
         try:
-            count = db._collection.count()
+            count = len(db.get()["ids"])
             if count > 0:
                 _db_cache = db
                 return db
@@ -93,7 +93,7 @@ def get_doc_count() -> int:
     if db is None:
         return 0
     try:
-        return db._collection.count()
+        return len(db.get()["ids"])
     except Exception:
         return 0
 
@@ -104,10 +104,9 @@ def get_collection_stats() -> dict:
     if db is None:
         return {"preloaded": 0, "uploaded": 0, "total": 0}
     try:
-        col = db._collection
-        total = col.count()
-        pre = len(col.get(where={"source_type": "preloaded"})["ids"])
-        up = len(col.get(where={"source_type": "uploaded"})["ids"])
+        total = len(db.get()["ids"])
+        pre = len(db.get(where={"source_type": "preloaded"})["ids"])
+        up = len(db.get(where={"source_type": "uploaded"})["ids"])
         return {"preloaded": pre, "uploaded": up, "total": total}
     except Exception:
         return {"preloaded": 0, "uploaded": 0, "total": 0}
@@ -130,14 +129,15 @@ def get_context_for_query(query: str, source_type: str | None = None) -> list[di
     seen, chunks = set(), []
     for d in docs:
         src = d.metadata.get("source_file", d.metadata.get("source", "?"))
-        page = d.metadata.get("page", "")
-        key = f"{src}:{page}"
+        raw_page = d.metadata.get("page")
+        page = int(raw_page) if raw_page is not None else None
+        key = f"{src}:{raw_page}"
         if key not in seen:
             seen.add(key)
             chunks.append(
                 {
                     "file": src,
-                    "page": int(page) + 1 if page != "" else None,
+                    "page": page + 1 if page is not None else None,
                     "content": d.page_content.strip(),
                     "source_type": d.metadata.get("source_type", ""),
                 }
@@ -159,7 +159,9 @@ def clear_uploads():
     db = _load_store()
     if db:
         try:
-            db._collection.delete(where={"source_type": "uploaded"})
+            existing = db.get(where={"source_type": "uploaded"})
+            if existing and existing["ids"]:
+                db.delete(existing["ids"])
         except Exception:
             pass
     if UPLOAD_DIR.exists():
@@ -237,7 +239,9 @@ def ingest_documents(
     db = _load_store()
     if db:
         try:
-            db._collection.delete(where={"source_type": source_type})
+            existing = db.get(where={"source_type": source_type})
+            if existing and existing["ids"]:
+                db.delete(existing["ids"])
         except Exception:
             pass
         db.add_documents(all_chunks)
@@ -256,8 +260,9 @@ def _format_docs(docs: list[Document]) -> str:
     parts = []
     for d in docs:
         src = d.metadata.get("source_file", d.metadata.get("source", "unknown"))
-        page = d.metadata.get("page", "")
-        header = f"[{src}" + (f" · p.{page + 1}" if page != "" else "") + "]"
+        raw_page = d.metadata.get("page")
+        page = int(raw_page) if raw_page is not None else None
+        header = f"[{src}" + (f" · p.{page + 1}" if page is not None else "") + "]"
         parts.append(f"{header}\n{d.page_content.strip()}")
     return "\n\n".join(parts)
 
@@ -321,14 +326,15 @@ def get_sources_for_query(query: str, source_type: str | None = None) -> list[di
     seen, sources = set(), []
     for d in docs:
         src = d.metadata.get("source_file", d.metadata.get("source", "?"))
-        page = d.metadata.get("page", "")
-        key = f"{src}:{page}"
+        raw_page = d.metadata.get("page")
+        page = int(raw_page) if raw_page is not None else None
+        key = f"{src}:{raw_page}"
         if key not in seen:
             seen.add(key)
             sources.append(
                 {
                     "file": src,
-                    "page": int(page) + 1 if page != "" else None,
+                    "page": page + 1 if page is not None else None,
                     "snippet": d.page_content[:180].replace("\n", " "),
                     "source_type": d.metadata.get("source_type", ""),
                 }
