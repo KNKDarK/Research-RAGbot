@@ -87,7 +87,7 @@ repos:
 
       - id: semgrep
         name: semgrep
-        entry: myvenv/bin/python -m semgrep
+        entry: myvenv/bin/semgrep
         language: system
         pass_filenames: false
         always_run: true
