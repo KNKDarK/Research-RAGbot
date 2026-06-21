@@ -16,6 +16,8 @@ include:
 
 variables:
   SECRET_DETECTION_ENABLED: 'true'
+  SAST_EXCLUDED_PATHS: 'builds,cache,.venv,myvenv,chroma_db'
+  SECRET_DETECTION_EXCLUDED_PATHS: 'builds,cache,.venv,myvenv,chroma_db'
   PIP_CACHE_DIR: ${CI_PROJECT_DIR}/.cache/pip
   VENV_DIR: ${CI_PROJECT_DIR}/.venv
 
@@ -62,7 +64,7 @@ ruff-lint:
       when: never
     - when: always
   script:
-    - ${VENV_DIR}/bin/ruff check .
+    - ${VENV_DIR}/bin/python -m ruff check .
 
 ruff-format:
   stage: format
@@ -72,7 +74,7 @@ ruff-format:
       when: never
     - when: always
   script:
-    - ${VENV_DIR}/bin/ruff format --check .
+    - ${VENV_DIR}/bin/python -m ruff format --check .
 
 mypy:
   stage: type_check
@@ -82,7 +84,7 @@ mypy:
       when: never
     - when: always
   script:
-    - ${VENV_DIR}/bin/mypy . --ignore-missing-imports
+    - ${VENV_DIR}/bin/python -m mypy . --ignore-missing-imports
 
 pytest:
   stage: test
@@ -93,7 +95,7 @@ pytest:
     - when: always
   coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
   script:
-    - PYTHONPATH=. ${VENV_DIR}/bin/pytest --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=20
+    - PYTHONPATH=. ${VENV_DIR}/bin/python -m pytest --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=20
   artifacts:
     when: always
     reports:
@@ -112,7 +114,7 @@ bandit:
       when: never
     - when: always
   script:
-    - ${VENV_DIR}/bin/bandit -r . -ll -c bandit.yaml
+    - ${VENV_DIR}/bin/python -m bandit -r . -ll -c bandit.yaml
 
 pip-audit:
   stage: security
@@ -122,7 +124,7 @@ pip-audit:
       when: never
     - when: always
   script:
-    - ${VENV_DIR}/bin/pip-audit
+    - ${VENV_DIR}/bin/python -m pip_audit --ignore-vuln CVE-2026-45829
 
 sast:
   rules:

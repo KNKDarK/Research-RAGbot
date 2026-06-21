@@ -41,6 +41,7 @@ data/
 
 # GitLab runner workspace
 builds/
+cache/
 
 # OS files
 .DS_Store

@@ -7,10 +7,13 @@ skips:
 exclude_dirs:
   - .git
   - builds
+  - cache
   - .mypy_cache
   - .pytest_cache
   - .ruff_cache
   - __pycache__
+  - .venv
+  - venv
   - chroma_db
   - myvenv
   - tests

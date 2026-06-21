@@ -43,7 +43,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: myvenv/bin/mypy
+        entry: myvenv/bin/python -m mypy
         language: system
         types: [python]
         pass_filenames: true
@@ -52,16 +52,16 @@ repos:
 
       - id: vulture
         name: vulture
-        entry: myvenv/bin/vulture
+        entry: myvenv/bin/python -m vulture
         language: system
         pass_filenames: false
         always_run: true
-        args: ["--exclude", "myvenv", "--min-confidence", "100", "."]
+        args: ["--exclude", "myvenv,builds", "--min-confidence", "100", "."]
         stages: [pre-push]
 
       - id: pytest
         name: pytest
-        entry: env PYTHONPATH=. myvenv/bin/pytest --cov=. --cov-report=term-missing --cov-fail-under=20
+        entry: env PYTHONPATH=. myvenv/bin/python -m pytest --cov=. --cov-report=term-missing --cov-fail-under=20
         language: system
         pass_filenames: false
         always_run: true
@@ -69,7 +69,7 @@ repos:
 
       - id: bandit
         name: bandit
-        entry: myvenv/bin/bandit
+        entry: myvenv/bin/python -m bandit
         language: system
         types: [python]
         pass_filenames: true
@@ -78,7 +78,7 @@ repos:
 
       - id: pip-audit
         name: pip-audit
-        entry: myvenv/bin/pip-audit
+        entry: myvenv/bin/python -m pip_audit
         language: system
         pass_filenames: false
         always_run: true
@@ -87,7 +87,7 @@ repos:
 
       - id: semgrep
         name: semgrep
-        entry: myvenv/bin/semgrep
+        entry: myvenv/bin/python -m semgrep
         language: system
         pass_filenames: false
         always_run: true
@@ -96,6 +96,7 @@ repos:
             "--config=auto",
             "--error",
             "--exclude=myvenv",
+            "--exclude=builds",
             "--exclude=chroma_db",
             "--exclude=.git",
           ]
