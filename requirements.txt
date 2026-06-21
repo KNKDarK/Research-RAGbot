@@ -18,5 +18,5 @@ bandit>=1.8.3
 vulture>=2.11
 pylint>=3.2
 semgrep>=1.94
-pyupgrade>=3.19
+pyupgrade>=3.21.2
 pip-audit>=2.7.3
