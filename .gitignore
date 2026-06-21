@@ -39,6 +39,9 @@ env/
 chroma_db/
 data/
 
+# GitLab runner workspace
+builds/
+
 # OS files
 .DS_Store
 Thumbs.db

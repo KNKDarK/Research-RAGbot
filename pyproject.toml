@@ -13,6 +13,7 @@ Repository = "git@ssh.code.swecha.org:ssmk/rag-chat-bot.git"
 target-version = "py311"
 extend-exclude = [
   ".vulture-whitelist.py",
+  "builds",
   "chroma_db",
   "myvenv",
 ]
@@ -21,6 +22,7 @@ extend-exclude = [
 python_version = "3.11"
 ignore_missing_imports = true
 exclude = [
+  "builds/",
   "myvenv/",
   "chroma_db/",
 ]
