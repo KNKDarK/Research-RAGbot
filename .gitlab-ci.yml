@@ -116,7 +116,7 @@ bandit:
   script:
     - ${VENV_DIR}/bin/python -m bandit -r . -ll -c bandit.yaml
 
-pip-audit:
+uv-audit:
   stage: security
   extends: .python-base
   rules:
@@ -124,7 +124,7 @@ pip-audit:
       when: never
     - when: always
   script:
-    - ${VENV_DIR}/bin/python -m pip_audit --ignore-vuln CVE-2026-45829
+    - ${VENV_DIR}/bin/uv audit --ignore CVE-2026-45829
 
 sast:
   rules:

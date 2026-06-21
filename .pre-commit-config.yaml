@@ -48,7 +48,7 @@ repos:
         types: [python]
         pass_filenames: true
         args: [--ignore-missing-imports]
-        stages: [pre-push]
+        stages: [pre-commit]
 
       - id: vulture
         name: vulture
@@ -65,7 +65,7 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        stages: [pre-push]
+        stages: [pre-commit]
 
       - id: bandit
         name: bandit
@@ -76,13 +76,13 @@ repos:
         args: ["-r", "-ll", "-c", "bandit.yaml"]
         stages: [pre-push]
 
-      - id: pip-audit
-        name: pip-audit
-        entry: myvenv/bin/python -m pip_audit
+      - id: uv-audit
+        name: uv audit
+        entry: myvenv/bin/uv audit
         language: system
         pass_filenames: false
         always_run: true
-        args: ["--ignore-vuln", "CVE-2026-45829"]
+        args: ["--ignore", "CVE-2026-45829"]
         stages: [pre-push]
 
       - id: semgrep
