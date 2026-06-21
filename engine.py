@@ -262,10 +262,9 @@ def _format_docs(docs: list[Document]) -> str:
     return "\n\n".join(parts)
 
 
-def build_chain(streaming: bool = False, source_type: str | None = None):
+def build_chain(source_type: str | None = None):
     """
     Returns (chain, retriever) or (None, None) if no documents indexed.
-    chain accepts a plain string question and returns str (or stream).
     Pass source_type="preloaded" / "uploaded" to filter retrieval.
     """
     db = _load_store()

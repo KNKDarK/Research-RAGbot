@@ -337,7 +337,7 @@ with st.sidebar:
             if n_chunks > 0:
                 st.success(f"✅ {n_files} file(s) → {n_chunks} chunks indexed!")
                 st.session_state.chain, st.session_state.retriever = build_chain(
-                    streaming=True, source_type=st.session_state.source_type
+                    source_type=st.session_state.source_type
                 )
                 st.session_state.doc_count = get_doc_count()
                 st.session_state.ready = st.session_state.chain is not None
@@ -378,7 +378,7 @@ with st.sidebar:
             ingest_documents(source_type="preloaded", progress_callback=_cb)
             progress_bar.empty()
             st.session_state.chain, st.session_state.retriever = build_chain(
-                streaming=True, source_type=st.session_state.source_type
+                source_type=st.session_state.source_type
             )
             st.session_state.doc_count = get_doc_count()
             st.session_state.ready = st.session_state.chain is not None
@@ -387,7 +387,7 @@ with st.sidebar:
         if st.button("🗑 Clear\nuploads", use_container_width=True):
             clear_uploads()
             st.session_state.chain, st.session_state.retriever = build_chain(
-                streaming=True, source_type=st.session_state.source_type
+                source_type=st.session_state.source_type
             )
             st.session_state.doc_count = get_doc_count()
             st.session_state.ready = st.session_state.chain is not None
@@ -468,7 +468,7 @@ if not st.session_state.ready and get_doc_count() == 0:
 if st.session_state.chain is None:
     with st.spinner("Loading model…"):
         st.session_state.chain, st.session_state.retriever = build_chain(
-            streaming=True, source_type=st.session_state.source_type
+            source_type=st.session_state.source_type
         )
         st.session_state.ready = st.session_state.chain is not None
 

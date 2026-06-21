@@ -1,20 +1,27 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
+  # ── Fast checks: run on every commit ──────────────────────────────
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
+        stages: [pre-commit]
       - id: end-of-file-fixer
+        stages: [pre-commit]
       - id: check-yaml
+        stages: [pre-commit]
       - id: check-added-large-files
+        stages: [pre-commit]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.4.10
     hooks:
       - id: ruff
-        args: [ --fix ]
+        args: [--fix]
+        stages: [pre-commit]
       - id: ruff-format
+        stages: [pre-commit]
 
   - repo: https://github.com/pycqa/pylint
     rev: v3.2.7
@@ -22,7 +29,16 @@ repos:
       - id: pylint
         args: [--rcfile=.pylintrc]
         exclude: tests/
+        stages: [pre-commit]
 
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.21.2
+    hooks:
+      - id: pyupgrade
+        args: [--py311-plus]
+        stages: [pre-commit]
+
+  # ── Heavy checks: run only on push ────────────────────────────────
   - repo: local
     hooks:
       - id: mypy
@@ -32,6 +48,7 @@ repos:
         types: [python]
         pass_filenames: true
         args: [--ignore-missing-imports]
+        stages: [pre-push]
 
       - id: vulture
         name: vulture
@@ -39,8 +56,8 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        stages: [manual]
         args: ["--exclude", "myvenv", "--min-confidence", "100", "."]
+        stages: [pre-push]
 
       - id: pytest
         name: pytest
@@ -48,6 +65,7 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+        stages: [pre-push]
 
       - id: bandit
         name: bandit
@@ -56,6 +74,7 @@ repos:
         types: [python]
         pass_filenames: true
         args: ["-r", "-ll", "-c", "bandit.yaml"]
+        stages: [pre-push]
 
       - id: pip-audit
         name: pip-audit
@@ -63,4 +82,21 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        args: [ "--ignore-vuln", "CVE-2026-45829" ]
+        args: ["--ignore-vuln", "CVE-2026-45829"]
+        stages: [pre-push]
+
+      - id: semgrep
+        name: semgrep
+        entry: myvenv/bin/semgrep
+        language: system
+        pass_filenames: false
+        always_run: true
+        args:
+          [
+            "--config=auto",
+            "--error",
+            "--exclude=myvenv",
+            "--exclude=chroma_db",
+            "--exclude=.git",
+          ]
+        stages: [pre-push]
