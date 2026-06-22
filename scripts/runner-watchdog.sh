@@ -33,7 +33,7 @@ HAS_RUN_JOBS=false
 
 while kill -0 "$RUNNER_PID" 2>/dev/null; do
     # Check recent log lines for job activity
-    RECENT=$(tail -5 "$RUNNER_LOG" 2>/dev/null || true)
+    RECENT=$(tail -n 10 "$RUNNER_LOG" 2>/dev/null || true)
 
     if echo "$RECENT" | grep -qE "(Job succeeded|Job failed|Job.*failed)"; then
         HAS_RUN_JOBS=true
@@ -45,6 +45,13 @@ while kill -0 "$RUNNER_PID" 2>/dev/null; do
         HAS_RUN_JOBS=true
         LAST_ACTIVITY=$(date +%s)
         echo "[watchdog] New job received, resetting activity timer." >> "$RUNNER_LOG"
+    fi
+
+    # Check if there are any active builds currently running
+    ACTIVE_BUILDS=$(grep -oE "builds=[0-9]+" "$RUNNER_LOG" 2>/dev/null | tail -n 1 | cut -d= -f2 || echo 0)
+    ACTIVE_BUILDS=${ACTIVE_BUILDS:-0}
+    if [ "$ACTIVE_BUILDS" -gt 0 ]; then
+        LAST_ACTIVITY=$(date +%s)
     fi
 
     # Only enforce idle timeout after at least one job has run
