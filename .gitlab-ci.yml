@@ -37,7 +37,7 @@ variables:
         echo "python3 or python is required on the shell runner"
         exit 1
       fi
-      "$PYTHON_BIN" -m venv "$VENV_DIR"
+      "$PYTHON_BIN" -m venv --clear "$VENV_DIR"
     - ${VENV_DIR}/bin/python -m pip install --upgrade pip --quiet
     - ${VENV_DIR}/bin/python -m pip install -r requirements.txt --quiet
   interruptible: true
