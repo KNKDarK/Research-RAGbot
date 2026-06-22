@@ -6,19 +6,17 @@ set -euo pipefail
 
 RUNNER_CONFIG="${HOME}/.gitlab-runner/config.toml"
 RUNNER_LOG="${HOME}/.gitlab-runner/runner.log"
-IDLE_TIMEOUT=120  # seconds of no job activity before shutdown
+IDLE_TIMEOUT=120
 
 if [ ! -f "$RUNNER_CONFIG" ]; then
     echo "[watchdog] Runner config not found at $RUNNER_CONFIG" >> "$RUNNER_LOG"
     exit 1
 fi
 
-# Give GitLab time to receive the push and trigger the pipeline
 sleep 5
 
 echo "[watchdog] Starting runner..." >> "$RUNNER_LOG"
 
-# Start runner in background (no max-builds — runs until killed)
 gitlab-runner run --config "$RUNNER_CONFIG" >> "$RUNNER_LOG" 2>&1 &
 RUNNER_PID=$!
 
@@ -30,41 +28,34 @@ trap cleanup EXIT
 
 LAST_ACTIVITY=$(date +%s)
 HAS_RUN_JOBS=false
+LOG_POS=0
+LOG_INO=0
 
 while kill -0 "$RUNNER_PID" 2>/dev/null; do
-    # Check recent log lines for job activity
-    RECENT=$(tail -50 "$RUNNER_LOG" 2>/dev/null || true)
+    if [ -f "$RUNNER_LOG" ]; then
+        CUR_INO=$(stat -c %i "$RUNNER_LOG" 2>/dev/null || echo 0)
+        CUR_SIZE=$(stat -c %s "$RUNNER_LOG" 2>/dev/null || echo 0)
 
-    if echo "$RECENT" | grep -qE "(Job succeeded|Job failed|Job.*failed)"; then
-        HAS_RUN_JOBS=true
-        LAST_ACTIVITY=$(date +%s)
-    fi
-
-    if echo "$RECENT" | grep -q "Checking for jobs... received"; then
-        HAS_RUN_JOBS=true
-        LAST_ACTIVITY=$(date +%s)
-    fi
-
-    if echo "$RECENT" | grep -q "Appending trace to coordinator"; then
-        LAST_ACTIVITY=$(date +%s)
-    fi
-
-    # Check if there are any active builds currently running
-    ACTIVE_BUILDS=$(grep -oE "builds=[0-9]+" "$RUNNER_LOG" 2>/dev/null | tail -n 1 | cut -d= -f2 || echo 0)
-    ACTIVE_BUILDS=${ACTIVE_BUILDS:-0}
-    if [ "$ACTIVE_BUILDS" -gt 0 ]; then
-        LAST_ACTIVITY=$(date +%s)
-    fi
-
-    # Only enforce idle timeout after at least one job has run
-    if [ "$HAS_RUN_JOBS" = true ]; then
-        NOW=$(date +%s)
-        ELAPSED=$((NOW - LAST_ACTIVITY))
-        if [ "$ELAPSED" -gt "$IDLE_TIMEOUT" ]; then
-            echo "[watchdog] No job activity for ${IDLE_TIMEOUT}s, shutting down runner." >> "$RUNNER_LOG"
-            kill "$RUNNER_PID" 2>/dev/null
-            break
+        if [ "$CUR_INO" != "$LOG_INO" ]; then
+            LOG_POS=0
+            LOG_INO=$CUR_INO
         fi
+
+        if [ "$CUR_SIZE" -gt "$LOG_POS" ]; then
+            NEW_DATA=$(dd if="$RUNNER_LOG" bs=1 skip="$LOG_POS" 2>/dev/null)
+            LOG_POS=$CUR_SIZE
+
+            if echo "$NEW_DATA" | grep -qE "(Job (succeeded|failed)|Checking for jobs.*received|Appending trace to coordinator|builds=[1-9])"; then
+                HAS_RUN_JOBS=true
+                LAST_ACTIVITY=$(date +%s)
+            fi
+        fi
+    fi
+
+    if [ "$HAS_RUN_JOBS" = true ] && [ $(( $(date +%s) - LAST_ACTIVITY )) -gt "$IDLE_TIMEOUT" ]; then
+        echo "[watchdog] No job activity for ${IDLE_TIMEOUT}s, shutting down runner." >> "$RUNNER_LOG"
+        kill "$RUNNER_PID" 2>/dev/null
+        break
     fi
 
     sleep 5
