@@ -45,7 +45,7 @@ while kill -0 "$RUNNER_PID" 2>/dev/null; do
             NEW_DATA=$(dd if="$RUNNER_LOG" bs=1 skip="$LOG_POS" 2>/dev/null)
             LOG_POS=$CUR_SIZE
 
-            if echo "$NEW_DATA" | grep -qE "(Job (succeeded|failed)|Checking for jobs.*received|Appending trace to coordinator|builds=[1-9])"; then
+            if echo "$NEW_DATA" | grep -qE "(Job.*(succeeded|failed)|Checking for jobs.*received|Appending trace to coordinator|builds=[1-9])"; then
                 HAS_RUN_JOBS=true
                 LAST_ACTIVITY=$(date +%s)
             fi
