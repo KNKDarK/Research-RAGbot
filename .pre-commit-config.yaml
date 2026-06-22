@@ -56,7 +56,7 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        args: ["--exclude", "myvenv,builds", "--min-confidence", "100", "."]
+        args: ["--exclude", "myvenv,builds,.venv,chroma_db", "--min-confidence", "100", "."]
         stages: [pre-push]
 
       - id: pytest
@@ -98,6 +98,7 @@ repos:
             "--exclude=myvenv",
             "--exclude=builds",
             "--exclude=chroma_db",
+            "--exclude=.venv",
             "--exclude=.git",
           ]
         stages: [pre-push]
