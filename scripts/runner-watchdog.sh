@@ -33,18 +33,20 @@ HAS_RUN_JOBS=false
 
 while kill -0 "$RUNNER_PID" 2>/dev/null; do
     # Check recent log lines for job activity
-    RECENT=$(tail -n 10 "$RUNNER_LOG" 2>/dev/null || true)
+    RECENT=$(tail -50 "$RUNNER_LOG" 2>/dev/null || true)
 
     if echo "$RECENT" | grep -qE "(Job succeeded|Job failed|Job.*failed)"; then
         HAS_RUN_JOBS=true
         LAST_ACTIVITY=$(date +%s)
-        echo "[watchdog] Job completed, resetting activity timer." >> "$RUNNER_LOG"
     fi
 
     if echo "$RECENT" | grep -q "Checking for jobs... received"; then
         HAS_RUN_JOBS=true
         LAST_ACTIVITY=$(date +%s)
-        echo "[watchdog] New job received, resetting activity timer." >> "$RUNNER_LOG"
+    fi
+
+    if echo "$RECENT" | grep -q "Appending trace to coordinator"; then
+        LAST_ACTIVITY=$(date +%s)
     fi
 
     # Check if there are any active builds currently running
