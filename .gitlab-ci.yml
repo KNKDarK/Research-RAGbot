@@ -37,9 +37,14 @@ variables:
         echo "python3 or python is required on the shell runner"
         exit 1
       fi
-      "$PYTHON_BIN" -m venv --clear "$VENV_DIR"
+      # Only clear venv if Python version changed (cache may have stale venv)
+      if [ -f "$VENV_DIR/bin/python" ] && ! "$VENV_DIR/bin/python" --version 2>/dev/null | grep -qF "$("$PYTHON_BIN" --version)"; then
+        "$PYTHON_BIN" -m venv --clear "$VENV_DIR"
+      elif [ ! -d "$VENV_DIR" ]; then
+        "$PYTHON_BIN" -m venv "$VENV_DIR"
+      fi
     - ${VENV_DIR}/bin/python -m pip install --upgrade pip --quiet
-    - ${VENV_DIR}/bin/python -m pip install -r requirements.txt --quiet
+    - ${VENV_DIR}/bin/python -m pip install -r requirements.txt
   interruptible: true
 
 tag-pipeline:
