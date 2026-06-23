@@ -30,6 +30,9 @@ exclude = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "engine_overrides(...): mark a test to use overridden engine dependencies",
+]
 filterwarnings = [
     "ignore:`langchain-community` is being sunset:DeprecationWarning",
     "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning",

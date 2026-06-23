@@ -286,7 +286,9 @@ def test_app_file_upload_triggers_ingest(app):
     sys.modules["engine"] = mock_engine
     at = AppTest.from_file("app.py", default_timeout=10)
     at.run()
-    at.file_uploader[0].upload("test.pdf", b"fake pdf data").run()
+    at.file_uploader[0].upload("test.pdf", b"fake pdf data")
+    at.run()
+    at.button[0].click().run()
     mock_engine.ingest_documents.assert_called()
     assert "doc_count" in at.session_state
 
