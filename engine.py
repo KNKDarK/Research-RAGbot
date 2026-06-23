@@ -11,16 +11,13 @@ import os
 import shutil
 from pathlib import Path
 
+from pypdf import PdfReader
+
 # ── ROCm / AMD GPU hints (set before importing anything GPU-related) ──────────
 os.environ.setdefault("HSA_OVERRIDE_GFX_VERSION", "10.3.0")  # RDNA2 gfx1034
 os.environ.setdefault("OLLAMA_NUM_GPU", "1")
 os.environ.setdefault("OLLAMA_GPU_OVERHEAD", "256MiB")  # keep headroom
 
-from langchain_community.document_loaders import (
-    PyPDFLoader,
-    TextLoader,
-    UnstructuredMarkdownLoader,
-)
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_chroma import Chroma
@@ -200,18 +197,25 @@ def clear_uploads():
 _SUPPORTED = {".pdf", ".txt", ".md", ".markdown"}
 
 
+def _load_pdf(path: Path) -> list[Document]:
+    reader = PdfReader(str(path))
+    docs: list[Document] = []
+    for i, page in enumerate(reader.pages):
+        text = page.extract_text()
+        if text.strip():
+            docs.append(Document(page_content=text, metadata={"page": i, "source": path.name}))
+    return docs
+
+
 def load_file(path: Path) -> list[Document]:
     ext = path.suffix.lower()
     try:
         if ext == ".pdf":
-            return PyPDFLoader(str(path)).load()
-        elif ext in {".md", ".markdown"}:
-            try:
-                return UnstructuredMarkdownLoader(str(path)).load()
-            except Exception:
-                return TextLoader(str(path), encoding="utf-8").load()
-        elif ext == ".txt":
-            return TextLoader(str(path), encoding="utf-8").load()
+            return _load_pdf(path)
+        elif ext in {".md", ".markdown", ".txt"}:
+            text = path.read_text(encoding="utf-8")
+            if text.strip():
+                return [Document(page_content=text, metadata={"source": path.name})]
     except Exception as e:
         print(f"[WARN] Could not load {path.name}: {e}")
     return []

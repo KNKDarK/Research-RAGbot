@@ -338,60 +338,59 @@ def test_clear_uploads_remove_dir():
 
 
 def test_load_file_pdf():
-    with patch("engine.PyPDFLoader") as MockLoader:
-        mock_loader = MockLoader.return_value
-        mock_loader.load.return_value = ["doc1", "doc2"]
+    with patch("engine.PdfReader") as MockReader:
+        mock_page = MagicMock()
+        mock_page.extract_text.return_value = "page text"
+        MockReader.return_value.pages = [mock_page]
         result = engine.load_file(Path("test.pdf"))
-        assert result == ["doc1", "doc2"]
-        MockLoader.assert_called_once_with("test.pdf")
+        assert len(result) == 1
+        assert result[0].page_content == "page text"
+        assert result[0].metadata["page"] == 0
 
 
-def test_load_file_txt():
-    with patch("engine.TextLoader") as MockLoader:
-        mock_loader = MockLoader.return_value
-        mock_loader.load.return_value = ["content"]
-        result = engine.load_file(Path("test.txt"))
-        assert result == ["content"]
-        MockLoader.assert_called_once_with("test.txt", encoding="utf-8")
+def test_load_file_txt(tmp_path):
+    f = tmp_path / "test.txt"
+    f.write_text("hello world")
+    result = engine.load_file(f)
+    assert len(result) == 1
+    assert result[0].page_content == "hello world"
 
 
-def test_load_file_md():
-    with patch("engine.UnstructuredMarkdownLoader") as MockMdLoader:
-        mock_loader = MockMdLoader.return_value
-        mock_loader.load.return_value = ["md content"]
-        result = engine.load_file(Path("test.md"))
-        assert result == ["md content"]
-        MockMdLoader.assert_called_once_with("test.md")
+def test_load_file_md(tmp_path):
+    f = tmp_path / "test.md"
+    f.write_text("# markdown")
+    result = engine.load_file(f)
+    assert len(result) == 1
+    assert result[0].page_content == "# markdown"
 
 
-def test_load_file_markdown():
-    with patch("engine.UnstructuredMarkdownLoader") as MockMdLoader:
-        mock_loader = MockMdLoader.return_value
-        mock_loader.load.return_value = ["md content"]
-        result = engine.load_file(Path("test.markdown"))
-        assert result == ["md content"]
-        MockMdLoader.assert_called_once_with("test.markdown")
+def test_load_file_markdown(tmp_path):
+    f = tmp_path / "test.markdown"
+    f.write_text("content")
+    result = engine.load_file(f)
+    assert len(result) == 1
+    assert result[0].page_content == "content"
 
 
-def test_load_file_md_fallback():
-    with patch("engine.UnstructuredMarkdownLoader") as MockMdLoader:
-        MockMdLoader.return_value.load.side_effect = Exception("parser error")
-        with patch("engine.TextLoader") as MockTxtLoader:
-            mock_txt = MockTxtLoader.return_value
-            mock_txt.load.return_value = ["fallback content"]
-            result = engine.load_file(Path("test.md"))
-            assert result == ["fallback content"]
+def test_load_file_error(tmp_path):
+    f = tmp_path / "test.pdf"
+    f.write_text("not a pdf")
+    result = engine.load_file(f)
+    assert result == []
 
 
-def test_load_file_error():
-    with patch("engine.PyPDFLoader") as MockLoader:
-        MockLoader.return_value.load.side_effect = Exception("load error")
-        result = engine.load_file(Path("test.pdf"))
-        assert result == []
+def test_load_file_empty_txt(tmp_path):
+    f = tmp_path / "empty.txt"
+    f.write_text("")
+    result = engine.load_file(f)
+    assert result == []
 
 
-def test_load_file_unsupported_ext():
-    assert engine.load_file(Path("test.invalid_ext")) == []
+def test_load_file_unsupported_ext(tmp_path):
+    f = tmp_path / "test.invalid_ext"
+    f.write_text("content")
+    result = engine.load_file(f)
+    assert result == []
 
 
 # ── ingest_documents ─────────────────────────────────────────────────────────
