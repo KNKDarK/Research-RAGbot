@@ -17,6 +17,7 @@ def _make_mock_db(ids=None, docs=None, metadatas=None):
         "documents": docs or [],
         "metadatas": metadatas or [{} for _ in ids],
     }
+    mock_db._collection.count.return_value = len(ids)
     mock_db.as_retriever.return_value = MagicMock()
     mock_db.as_retriever.return_value.invoke.return_value = []
     return mock_db
@@ -43,6 +44,7 @@ def test_load_store_empty():
         with patch("engine.Chroma") as MockChroma:
             mock_db = MockChroma.return_value
             mock_db.get.return_value = {"ids": []}
+            mock_db._collection.count.return_value = 0
             assert engine._load_store() is None
 
 
@@ -52,6 +54,7 @@ def test_load_store_with_data():
         with patch("engine.Chroma") as MockChroma:
             mock_db = MockChroma.return_value
             mock_db.get.return_value = {"ids": ["1", "2"]}
+            mock_db._collection.count.return_value = 2
             result = engine._load_store()
             assert result is mock_db
             assert engine._db_cache is mock_db
@@ -92,7 +95,7 @@ def test_get_doc_count_with_db():
 
 def test_get_doc_count_exception():
     mock_db = MagicMock()
-    mock_db.get.side_effect = Exception("error")
+    mock_db._collection.count.side_effect = Exception("error")
     with patch("engine._load_store", return_value=mock_db):
         assert engine.get_doc_count() == 0
 
@@ -111,6 +114,7 @@ def test_get_collection_stats_no_db():
 
 def test_get_collection_stats_with_data():
     mock_db = MagicMock()
+    mock_db._collection.count.return_value = 3
 
     def get_side_effect(**kwargs):
         where = kwargs.get("where", {})

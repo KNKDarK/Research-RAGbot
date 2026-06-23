@@ -15,8 +15,7 @@ from engine import (
     UPLOAD_DIR,
     ingest_documents,
     build_chain,
-    get_sources_for_query,
-    get_context_for_query,
+    retrieve_for_query,
     get_doc_count,
     get_collection_stats,
     clear_uploads,
@@ -30,190 +29,49 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Injected CSS ───────────────────────────────────────────────────────────────
-st.markdown(
-    """
+
+# ── Injected CSS (cached — only rebuilt on code change) ──────────────────────
+@st.cache_data(show_spinner=False)
+def _css() -> str:
+    return """
 <style>
-/* ── Google Font ──────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-/* ── Global ───────────────────────────────────────────── */
-html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-}
-.stApp {
-    background: linear-gradient(135deg, #0d0d1a 0%, #111128 50%, #0d1a2e 100%);
-    min-height: 100vh;
-}
-
-/* ── Sidebar ──────────────────────────────────────────── */
-[data-testid="stSidebar"] {
-    background: rgba(15, 15, 35, 0.95) !important;
-    border-right: 1px solid rgba(99, 102, 241, 0.2);
-}
-[data-testid="stSidebar"] .block-container {
-    padding-top: 1.5rem;
-}
-
-/* ── Header ───────────────────────────────────────────── */
-.rag-header {
-    background: linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.10) 100%);
-    border: 1px solid rgba(99,102,241,0.3);
-    border-radius: 16px;
-    padding: 1.4rem 1.8rem;
-    margin-bottom: 1.5rem;
-    backdrop-filter: blur(10px);
-}
-.rag-header h1 {
-    font-size: 1.6rem;
-    font-weight: 700;
-    background: linear-gradient(135deg, #a78bfa, #60a5fa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    margin: 0;
-    padding: 0;
-}
-.rag-header p {
-    color: #94a3b8;
-    font-size: 0.85rem;
-    margin: 0.3rem 0 0;
-}
-
-/* ── Status badges ────────────────────────────────────── */
-.badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    border-radius: 99px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-}
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+.stApp { background: linear-gradient(135deg, #0d0d1a 0%, #111128 50%, #0d1a2e 100%); min-height: 100vh; }
+[data-testid="stSidebar"] { background: rgba(15,15,35,0.95) !important; border-right: 1px solid rgba(99,102,241,0.2); }
+[data-testid="stSidebar"] .block-container { padding-top: 1.5rem; }
+.rag-header { background: linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.10) 100%); border: 1px solid rgba(99,102,241,0.3); border-radius: 16px; padding: 1.4rem 1.8rem; margin-bottom: 1.5rem; backdrop-filter: blur(10px); }
+.rag-header h1 { font-size: 1.6rem; font-weight: 700; background: linear-gradient(135deg, #a78bfa, #60a5fa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 0; padding: 0; }
+.rag-header p { color: #94a3b8; font-size: 0.85rem; margin: 0.3rem 0 0; }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 99px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em; }
 .badge-green  { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
 .badge-yellow { background: rgba(234,179,8,0.15);  color: #facc15; border: 1px solid rgba(234,179,8,0.3); }
 .badge-blue   { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3); }
 .badge-red    { background: rgba(239,68,68,0.12);  color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
-
-/* ── Chat messages ────────────────────────────────────── */
-.chat-bubble-user {
-    background: linear-gradient(135deg, rgba(99,102,241,0.22), rgba(139,92,246,0.18));
-    border: 1px solid rgba(99,102,241,0.35);
-    border-radius: 14px 14px 4px 14px;
-    padding: 0.85rem 1.1rem;
-    margin: 0.5rem 0;
-    color: #e2e8f0;
-    line-height: 1.6;
-    max-width: 88%;
-    margin-left: auto;
-}
-.chat-bubble-ai {
-    background: rgba(30, 30, 55, 0.85);
-    border: 1px solid rgba(99,102,241,0.18);
-    border-radius: 14px 14px 14px 4px;
-    padding: 0.85rem 1.1rem;
-    margin: 0.5rem 0;
-    color: #cbd5e1;
-    line-height: 1.6;
-    max-width: 92%;
-}
-.chat-label {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 0.3rem;
-}
+.chat-bubble-user { background: linear-gradient(135deg, rgba(99,102,241,0.22), rgba(139,92,246,0.18)); border: 1px solid rgba(99,102,241,0.35); border-radius: 14px 14px 4px 14px; padding: 0.85rem 1.1rem; margin: 0.5rem 0; color: #e2e8f0; line-height: 1.6; max-width: 88%; margin-left: auto; }
+.chat-bubble-ai { background: rgba(30,30,55,0.85); border: 1px solid rgba(99,102,241,0.18); border-radius: 14px 14px 14px 4px; padding: 0.85rem 1.1rem; margin: 0.5rem 0; color: #cbd5e1; line-height: 1.6; max-width: 92%; }
+.chat-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.3rem; }
 .label-user { color: #a78bfa; }
 .label-ai   { color: #60a5fa; }
-
-/* ── Sources panel ────────────────────────────────────── */
-.source-card {
-    background: rgba(15,23,42,0.7);
-    border: 1px solid rgba(99,102,241,0.2);
-    border-left: 3px solid #6366f1;
-    border-radius: 8px;
-    padding: 0.6rem 0.9rem;
-    margin: 0.35rem 0;
-    font-size: 0.8rem;
-    color: #94a3b8;
-}
+.source-card { background: rgba(15,23,42,0.7); border: 1px solid rgba(99,102,241,0.2); border-left: 3px solid #6366f1; border-radius: 8px; padding: 0.6rem 0.9rem; margin: 0.35rem 0; font-size: 0.8rem; color: #94a3b8; }
 .source-card strong { color: #a5b4fc; }
-
-/* ── Context panel ───────────────────────────────────── */
-.context-card {
-    background: rgba(15,23,42,0.85);
-    border: 1px solid rgba(139,92,246,0.25);
-    border-left: 4px solid #8b5cf6;
-    border-radius: 10px;
-    padding: 0.9rem 1.1rem;
-    margin: 0.6rem 0;
-    font-size: 0.82rem;
-    color: #cbd5e1;
-    line-height: 1.65;
-}
-.context-card .ctx-header {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #a78bfa;
-    margin-bottom: 0.4rem;
-}
-.context-card .ctx-text {
-    color: #e2e8f0;
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-/* ── Upload area ──────────────────────────────────────── */
-[data-testid="stFileUploader"] {
-    border: 2px dashed rgba(99,102,241,0.4) !important;
-    border-radius: 12px;
-    background: rgba(99,102,241,0.05);
-    transition: border-color 0.2s;
-}
-[data-testid="stFileUploader"]:hover {
-    border-color: rgba(99,102,241,0.7) !important;
-}
-
-/* ── Buttons ──────────────────────────────────────────── */
-.stButton > button {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 10px !important;
-    font-weight: 600 !important;
-    transition: all 0.2s ease !important;
-}
-.stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(99,102,241,0.4) !important;
-}
-
-/* ── Chat input ───────────────────────────────────────── */
-[data-testid="stChatInput"] > div {
-    background: rgba(20,20,45,0.9) !important;
-    border: 1px solid rgba(99,102,241,0.35) !important;
-    border-radius: 14px !important;
-}
-
-/* ── Dividers & misc ─────────────────────────────────── */
+.context-card { background: rgba(15,23,42,0.85); border: 1px solid rgba(139,92,246,0.25); border-left: 4px solid #8b5cf6; border-radius: 10px; padding: 0.9rem 1.1rem; margin: 0.6rem 0; font-size: 0.82rem; color: #cbd5e1; line-height: 1.65; }
+.context-card .ctx-header { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #a78bfa; margin-bottom: 0.4rem; }
+.context-card .ctx-text { color: #e2e8f0; white-space: pre-wrap; word-break: break-word; }
+[data-testid="stFileUploader"] { border: 2px dashed rgba(99,102,241,0.4) !important; border-radius: 12px; background: rgba(99,102,241,0.05); transition: border-color 0.2s; }
+[data-testid="stFileUploader"]:hover { border-color: rgba(99,102,241,0.7) !important; }
+.stButton > button { background: linear-gradient(135deg, #6366f1, #8b5cf6) !important; color: white !important; border: none !important; border-radius: 10px !important; font-weight: 600 !important; transition: all 0.2s ease !important; }
+.stButton > button:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,0.4) !important; }
+[data-testid="stChatInput"] > div { background: rgba(20,20,45,0.9) !important; border: 1px solid rgba(99,102,241,0.35) !important; border-radius: 14px !important; }
 hr { border-color: rgba(99,102,241,0.15) !important; }
 .stMarkdown p { color: #94a3b8; }
-[data-testid="metric-container"] {
-    background: rgba(15,23,42,0.6);
-    border: 1px solid rgba(99,102,241,0.2);
-    border-radius: 10px;
-    padding: 0.5rem;
-}
-
-/* hide streamlit branding */
+[data-testid="metric-container"] { background: rgba(15,23,42,0.6); border: 1px solid rgba(99,102,241,0.2); border-radius: 10px; padding: 0.5rem; }
 #MainMenu, footer, header { visibility: hidden; }
 </style>
-""",
-    unsafe_allow_html=True,
-)
+"""
+
+
+st.markdown(_css(), unsafe_allow_html=True)
 
 
 # ── Session state defaults ─────────────────────────────────────────────────────
@@ -289,7 +147,17 @@ with st.sidebar:
     )
     st.session_state.source_type = source_type
 
-    stats = get_collection_stats()
+    if "_stats_ts" not in st.session_state:
+        st.session_state._stats_ts = 0.0
+        st.session_state._stats = {}
+
+    import time
+
+    now = time.monotonic()
+    if now - st.session_state._stats_ts > 5.0:
+        st.session_state._stats = get_collection_stats()
+        st.session_state._stats_ts = now
+    stats = st.session_state._stats
     st.markdown(
         f'<div style="font-size:0.75rem; color:#64748b;">'
         f"📖 Preloaded: {stats['preloaded']} · "
@@ -433,7 +301,9 @@ st.markdown(
 )
 
 # ── Auto-ingest preloaded papers if empty ─────────────────────────────────────
-if get_doc_count() == 0:
+if not st.session_state.doc_count:
+    st.session_state.doc_count = get_doc_count()
+if st.session_state.doc_count == 0:
     preloaded_files = list(DATA_DIR.rglob("*")) if DATA_DIR.exists() else []
     has_preloaded = any(
         f.suffix.lower() in {".pdf", ".txt", ".md", ".markdown"}
@@ -444,7 +314,7 @@ if get_doc_count() == 0:
             ingest_documents(source_type="preloaded")
 
 # ── Guard: no documents ────────────────────────────────────────────────────────
-if not st.session_state.ready and get_doc_count() == 0:
+if not st.session_state.ready and st.session_state.doc_count == 0:
     st.markdown(
         """
         <div style="
@@ -521,17 +391,16 @@ if prompt := st.chat_input("Ask something about your documents…"):
         unsafe_allow_html=True,
     )
 
-    # Retrieve context & sources (parallel, non-streaming)
-    sources = []
-    context_chunks = []
+    # Single retrieval — eliminates redundant ChromaDB query
+    sources: list[dict] = []
+    context_chunks: list[dict] = []
     if st.session_state.show_sources or st.session_state.show_context:
         source_type_filter = (
             st.session_state.source_type
             if st.session_state.source_type != "all"
             else None
         )
-        context_chunks = get_context_for_query(prompt, source_type_filter)
-        sources = get_sources_for_query(prompt, source_type_filter)
+        context_chunks, sources = retrieve_for_query(prompt, source_type_filter)
 
     # Show context expander first (before the answer)
     if st.session_state.show_context and context_chunks:

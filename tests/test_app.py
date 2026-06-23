@@ -28,6 +28,7 @@ def _make_mock_engine(**overrides):
         "UPLOAD_DIR": Path("./uploads"),
         "ingest_documents": MagicMock(return_value=(0, 0)),
         "build_chain": MagicMock(return_value=(None, None)),
+        "retrieve_for_query": MagicMock(return_value=([], [])),
         "get_sources_for_query": MagicMock(return_value=[]),
         "get_context_for_query": MagicMock(return_value=[]),
         "get_doc_count": MagicMock(return_value=0),
@@ -164,25 +165,25 @@ def test_app_chat_saves_context_and_sources(app):
             return_value={"preloaded": 5, "uploaded": 0, "total": 5}
         ),
         build_chain=MagicMock(return_value=(mock_chain, MagicMock())),
-        get_context_for_query=MagicMock(
-            return_value=[
-                {
-                    "file": "doc.pdf",
-                    "page": 1,
-                    "content": "ctx content",
-                    "source_type": "preloaded",
-                }
-            ]
-        ),
-        get_sources_for_query=MagicMock(
-            return_value=[
-                {
-                    "file": "doc.pdf",
-                    "page": 1,
-                    "snippet": "snip",
-                    "source_type": "preloaded",
-                }
-            ]
+        retrieve_for_query=MagicMock(
+            return_value=(
+                [
+                    {
+                        "file": "doc.pdf",
+                        "page": 1,
+                        "content": "ctx content",
+                        "source_type": "preloaded",
+                    }
+                ],
+                [
+                    {
+                        "file": "doc.pdf",
+                        "page": 1,
+                        "snippet": "snip",
+                        "source_type": "preloaded",
+                    }
+                ],
+            )
         ),
     )
     sys.modules["engine"] = mock_engine
@@ -299,15 +300,18 @@ def test_app_chat_displays_context(app):
     mock_engine = _make_mock_engine(
         get_doc_count=MagicMock(return_value=5),
         build_chain=MagicMock(return_value=(mock_chain, MagicMock())),
-        get_context_for_query=MagicMock(
-            return_value=[
-                {
-                    "file": "doc.pdf",
-                    "page": 1,
-                    "content": "ctx",
-                    "source_type": "preloaded",
-                }
-            ]
+        retrieve_for_query=MagicMock(
+            return_value=(
+                [
+                    {
+                        "file": "doc.pdf",
+                        "page": 1,
+                        "content": "ctx",
+                        "source_type": "preloaded",
+                    }
+                ],
+                [],
+            )
         ),
     )
     sys.modules["engine"] = mock_engine
@@ -324,15 +328,18 @@ def test_app_chat_with_sources_disabled(app):
     mock_engine = _make_mock_engine(
         get_doc_count=MagicMock(return_value=5),
         build_chain=MagicMock(return_value=(mock_chain, MagicMock())),
-        get_sources_for_query=MagicMock(
-            return_value=[
-                {
-                    "file": "doc.pdf",
-                    "page": 1,
-                    "snippet": "snip",
-                    "source_type": "preloaded",
-                }
-            ]
+        retrieve_for_query=MagicMock(
+            return_value=(
+                [],
+                [
+                    {
+                        "file": "doc.pdf",
+                        "page": 1,
+                        "snippet": "snip",
+                        "source_type": "preloaded",
+                    }
+                ],
+            )
         ),
     )
     sys.modules["engine"] = mock_engine
@@ -350,15 +357,18 @@ def test_app_chat_with_context_disabled(app):
     mock_engine = _make_mock_engine(
         get_doc_count=MagicMock(return_value=5),
         build_chain=MagicMock(return_value=(mock_chain, MagicMock())),
-        get_context_for_query=MagicMock(
-            return_value=[
-                {
-                    "file": "doc.pdf",
-                    "page": 1,
-                    "content": "ctx data",
-                    "source_type": "preloaded",
-                }
-            ]
+        retrieve_for_query=MagicMock(
+            return_value=(
+                [
+                    {
+                        "file": "doc.pdf",
+                        "page": 1,
+                        "content": "ctx data",
+                        "source_type": "preloaded",
+                    }
+                ],
+                [],
+            )
         ),
     )
     sys.modules["engine"] = mock_engine
@@ -376,15 +386,18 @@ def test_app_chat_context_display_on_rerun(app):
     mock_engine = _make_mock_engine(
         get_doc_count=MagicMock(return_value=5),
         build_chain=MagicMock(return_value=(mock_chain, MagicMock())),
-        get_context_for_query=MagicMock(
-            return_value=[
-                {
-                    "file": "doc.pdf",
-                    "page": 1,
-                    "content": "display me",
-                    "source_type": "preloaded",
-                }
-            ]
+        retrieve_for_query=MagicMock(
+            return_value=(
+                [
+                    {
+                        "file": "doc.pdf",
+                        "page": 1,
+                        "content": "display me",
+                        "source_type": "preloaded",
+                    }
+                ],
+                [],
+            )
         ),
     )
     sys.modules["engine"] = mock_engine

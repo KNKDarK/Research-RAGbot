@@ -73,8 +73,8 @@ def _load_store() -> Chroma | None:
     if CHROMA_DIR.exists():
         db = Chroma(persist_directory=str(CHROMA_DIR), embedding_function=_embeddings)
         try:
-            count = len(db.get()["ids"])
-            if count > 0:
+            # limit=1 avoids fetching all docs just to check emptiness
+            if len(db.get(limit=1)["ids"]) > 0:
                 _db_cache = db
                 return db
         except Exception:
@@ -93,7 +93,7 @@ def get_doc_count() -> int:
     if db is None:
         return 0
     try:
-        return len(db.get()["ids"])
+        return db._collection.count()
     except Exception:
         return 0
 
@@ -104,7 +104,7 @@ def get_collection_stats() -> dict:
     if db is None:
         return {"preloaded": 0, "uploaded": 0, "total": 0}
     try:
-        total = len(db.get()["ids"])
+        total = db._collection.count()
         pre = len(db.get(where={"source_type": "preloaded"})["ids"])
         up = len(db.get(where={"source_type": "uploaded"})["ids"])
         return {"preloaded": pre, "uploaded": up, "total": total}
@@ -112,11 +112,17 @@ def get_collection_stats() -> dict:
         return {"preloaded": 0, "uploaded": 0, "total": 0}
 
 
-def get_context_for_query(query: str, source_type: str | None = None) -> list[dict]:
-    """Return full context chunks for a query — rich context display."""
+def retrieve_for_query(
+    query: str, source_type: str | None = None
+) -> tuple[list[dict], list[dict]]:
+    """Single retrieval returning (context_chunks, sources) for a query.
+
+    Eliminates redundant ChromaDB queries — use this instead of calling
+    get_context_for_query + get_sources_for_query separately.
+    """
     db = _load_store()
     if db is None:
-        return []
+        return [], []
     search_kwargs: dict = {
         "k": RETRIEVER_K,
         "fetch_k": FETCH_K,
@@ -126,7 +132,7 @@ def get_context_for_query(query: str, source_type: str | None = None) -> list[di
         search_kwargs["filter"] = {"source_type": source_type}
     retriever = db.as_retriever(search_type="mmr", search_kwargs=search_kwargs)
     docs = retriever.invoke(query)
-    seen, chunks = set(), []
+    seen, context_chunks, sources = set(), [], []
     for d in docs:
         src = d.metadata.get("source_file", d.metadata.get("source", "?"))
         raw_page = d.metadata.get("page")
@@ -134,15 +140,36 @@ def get_context_for_query(query: str, source_type: str | None = None) -> list[di
         key = f"{src}:{raw_page}"
         if key not in seen:
             seen.add(key)
-            chunks.append(
+            page_display = page + 1 if page is not None else None
+            context_chunks.append(
                 {
                     "file": src,
-                    "page": page + 1 if page is not None else None,
+                    "page": page_display,
                     "content": d.page_content.strip(),
                     "source_type": d.metadata.get("source_type", ""),
                 }
             )
-    return chunks
+            sources.append(
+                {
+                    "file": src,
+                    "page": page_display,
+                    "snippet": d.page_content[:180].replace("\n", " "),
+                    "source_type": d.metadata.get("source_type", ""),
+                }
+            )
+    return context_chunks, sources
+
+
+def get_context_for_query(query: str, source_type: str | None = None) -> list[dict]:
+    """Return full context chunks for a query — delegates to retrieve_for_query."""
+    ctx, _ = retrieve_for_query(query, source_type)
+    return ctx
+
+
+def get_sources_for_query(query: str, source_type: str | None = None) -> list[dict]:
+    """Return source metadata for a given query — delegates to retrieve_for_query."""
+    _, src = retrieve_for_query(query, source_type)
+    return src
 
 
 def clear_vector_store():
@@ -307,36 +334,3 @@ def build_chain(source_type: str | None = None):
     )
 
     return chain, retriever
-
-
-def get_sources_for_query(query: str, source_type: str | None = None) -> list[dict]:
-    """Return source metadata for a given query (for display)."""
-    db = _load_store()
-    if db is None:
-        return []
-    search_kwargs: dict = {
-        "k": RETRIEVER_K,
-        "fetch_k": FETCH_K,
-        "lambda_mult": MMR_LAMBDA,
-    }
-    if source_type:
-        search_kwargs["filter"] = {"source_type": source_type}
-    retriever = db.as_retriever(search_type="mmr", search_kwargs=search_kwargs)
-    docs = retriever.invoke(query)
-    seen, sources = set(), []
-    for d in docs:
-        src = d.metadata.get("source_file", d.metadata.get("source", "?"))
-        raw_page = d.metadata.get("page")
-        page = int(raw_page) if raw_page is not None else None
-        key = f"{src}:{raw_page}"
-        if key not in seen:
-            seen.add(key)
-            sources.append(
-                {
-                    "file": src,
-                    "page": page + 1 if page is not None else None,
-                    "snippet": d.page_content[:180].replace("\n", " "),
-                    "source_type": d.metadata.get("source_type", ""),
-                }
-            )
-    return sources
