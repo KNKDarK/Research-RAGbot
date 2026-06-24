@@ -103,28 +103,51 @@ with st.sidebar:
         <div style="text-align:center; margin-bottom:1.2rem;">
           <div style="font-size:2.5rem; margin-bottom:0.3rem;">🔬</div>
           <div style="font-weight:700; font-size:1.1rem; color:#a78bfa;">Research Assistant</div>
-          <div style="font-size:0.72rem; color:#64748b; margin-top:2px;">phi4-mini · nomic-embed · ChromaDB</div>
+          <div style="font-size:0.72rem; color:#64748b; margin-top:2px;">ChromaDB · LangChain</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # ── Model / GPU Status ────────────────────────────────────────────────────
-    st.markdown("#### ⚡ System Status")
+    # ── Model / Provider Status ──────────────────────────────────────────────
+    from engine import (
+        EMBED_PROVIDER,
+        LLM_PROVIDER,
+        EMBED_MODEL,
+        LLM_MODEL,
+        HF_EMBED_MODEL,
+        OPENAI_MODEL,
+        GROQ_MODEL,
+    )
+
+    embed_label = (
+        f"{EMBED_MODEL}" if EMBED_PROVIDER == "ollama" else f"{HF_EMBED_MODEL}"
+    )
+    llm_label = (
+        f"{LLM_MODEL}"
+        if LLM_PROVIDER == "ollama"
+        else (f"{OPENAI_MODEL}" if LLM_PROVIDER == "openai" else f"{GROQ_MODEL}")
+    )
+
+    st.markdown("#### ⚡ Provider Status")
     col1, col2 = st.columns(2)
     with col1:
+        color = "green" if EMBED_PROVIDER == "ollama" else "blue"
         st.markdown(
-            '<div class="badge badge-green">🟢 GPU ROCm</div>', unsafe_allow_html=True
+            f'<div class="badge badge-{color}">🔄 {EMBED_PROVIDER}</div>',
+            unsafe_allow_html=True,
         )
     with col2:
+        color = "green" if LLM_PROVIDER == "ollama" else "blue"
         st.markdown(
-            '<div class="badge badge-blue">Research</div>', unsafe_allow_html=True
+            f'<div class="badge badge-{color}">🧠 {LLM_PROVIDER}</div>',
+            unsafe_allow_html=True,
         )
 
     st.markdown(
-        """
+        f"""
         <div style="font-size:0.72rem; color:#475569; margin: 0.5rem 0 1rem;">
-          AMD RX 6500M · gfx1034 · ROCm
+          Embed: {embed_label} · LLM: {llm_label}
         </div>
         """,
         unsafe_allow_html=True,
@@ -278,13 +301,13 @@ with st.sidebar:
             "Show source citations", value=st.session_state.show_sources
         )
         st.session_state.show_context = st.toggle("Show retrieved context", value=True)
-        st.caption("GPU: AMD RX 6500M (RDNA2)")
-        st.caption("HSA_GFX: 10.3.0 (gfx1034)")
-        st.caption("ctx window: 4096 tokens")
+        st.caption(f"Embed: {EMBED_PROVIDER} ({embed_label})")
+        st.caption(f"LLM: {LLM_PROVIDER} ({llm_label})")
+        st.caption("Similarity: MMR · k=4")
 
     st.markdown(
         '<div style="font-size:0.68rem; color:#334155; margin-top:1rem; text-align:center;">'
-        "Powered by Ollama · LangChain · ChromaDB</div>",
+        f"Powered by {EMBED_PROVIDER} · {LLM_PROVIDER} · LangChain · ChromaDB</div>",
         unsafe_allow_html=True,
     )
 

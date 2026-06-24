@@ -26,6 +26,13 @@ def _make_mock_engine(**overrides):
     defaults = {
         "DATA_DIR": Path("./data"),
         "UPLOAD_DIR": Path("./uploads"),
+        "EMBED_PROVIDER": "ollama",
+        "LLM_PROVIDER": "ollama",
+        "EMBED_MODEL": "nomic-embed-text",
+        "LLM_MODEL": "phi4-mini",
+        "HF_EMBED_MODEL": "all-MiniLM-L6-v2",
+        "OPENAI_MODEL": "gpt-4o-mini",
+        "GROQ_MODEL": "llama-3.1-8b-instant",
         "ingest_documents": MagicMock(return_value=(0, 0)),
         "build_chain": MagicMock(return_value=(None, None)),
         "retrieve_for_query": MagicMock(return_value=([], [])),

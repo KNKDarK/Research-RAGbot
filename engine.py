@@ -1,7 +1,7 @@
 """
 engine.py — Optimized RAG Engine
-- LLM  : phi4-mini via Ollama (ROCm/AMD GPU accelerated)
-- Embed: nomic-embed-text via Ollama
+- LLM  : phi4-mini via Ollama (ROCm/AMD GPU accelerated) or API-based (OpenAI/Groq)
+- Embed: nomic-embed-text via Ollama or all-MiniLM-L6-v2 via HuggingFace
 - Store: ChromaDB (persistent, MMR retrieval)
 - AMD RX 6500M (RDNA2 / gfx1034) → HSA_OVERRIDE_GFX_VERSION=10.3.0
 """
@@ -20,6 +20,9 @@ os.environ.setdefault("OLLAMA_GPU_OVERHEAD", "256MiB")  # keep headroom
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings, ChatOllama
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -30,8 +33,19 @@ from langchain_core.documents import Document
 DATA_DIR = Path("./data")  # pre-downloaded / bundled papers
 UPLOAD_DIR = Path("./uploads")  # user-uploaded papers
 CHROMA_DIR = Path("./chroma_db")
-EMBED_MODEL = "nomic-embed-text"
-LLM_MODEL = "phi4-mini"
+
+# Embedding provider: "ollama" or "huggingface" (default: ollama for local dev)
+EMBED_PROVIDER = os.environ.get("EMBED_PROVIDER", "ollama")
+EMBED_MODEL = os.environ.get("EMBED_MODEL", "nomic-embed-text")  # Ollama model
+HF_EMBED_MODEL = os.environ.get(
+    "HF_EMBED_MODEL", "all-MiniLM-L6-v2"
+)  # HuggingFace model
+
+# LLM provider: "ollama", "openai", or "groq" (default: ollama for local dev)
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
+LLM_MODEL = os.environ.get("LLM_MODEL", "phi4-mini")  # Ollama model
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
 
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 64
@@ -55,8 +69,43 @@ Question: {question}
 Helpful Answer:"""
 )
 
-# ── Embeddings (singleton) ────────────────────────────────────────────────────
-_embeddings = OllamaEmbeddings(model=EMBED_MODEL)
+# ── Embeddings (lazy singleton) ────────────────────────────────────────────────
+_embeddings_cache = None
+
+
+def _get_embeddings():
+    global _embeddings_cache
+    if _embeddings_cache is not None:
+        return _embeddings_cache
+    if EMBED_PROVIDER == "ollama":
+        emb = OllamaEmbeddings(model=EMBED_MODEL)
+    else:
+        emb = HuggingFaceEmbeddings(model_name=HF_EMBED_MODEL)
+    _embeddings_cache = emb
+    return emb
+
+
+# ── LLM (lazy) ────────────────────────────────────────────────────────────────
+def _get_llm():
+    if LLM_PROVIDER == "openai":
+        return ChatOpenAI(
+            model=OPENAI_MODEL,
+            temperature=0.1,
+            max_tokens=512,
+        )
+    if LLM_PROVIDER == "groq":
+        return ChatGroq(
+            model=GROQ_MODEL,
+            temperature=0.1,
+            max_tokens=512,
+        )
+    return ChatOllama(
+        model=LLM_MODEL,
+        temperature=0.1,
+        num_ctx=4096,
+        num_predict=512,
+    )
+
 
 # ── ChromaDB cache (avoid reloading from disk) ───────────────────────────────
 _db_cache: Chroma | None = None
@@ -68,7 +117,9 @@ def _load_store() -> Chroma | None:
     if _db_cache is not None:
         return _db_cache
     if CHROMA_DIR.exists():
-        db = Chroma(persist_directory=str(CHROMA_DIR), embedding_function=_embeddings)
+        db = Chroma(
+            persist_directory=str(CHROMA_DIR), embedding_function=_get_embeddings()
+        )
         try:
             # limit=1 avoids fetching all docs just to check emptiness
             if len(db.get(limit=1)["ids"]) > 0:
@@ -203,7 +254,9 @@ def _load_pdf(path: Path) -> list[Document]:
     for i, page in enumerate(reader.pages):
         text = page.extract_text()
         if text.strip():
-            docs.append(Document(page_content=text, metadata={"page": i, "source": path.name}))
+            docs.append(
+                Document(page_content=text, metadata={"page": i, "source": path.name})
+            )
     return docs
 
 
@@ -279,7 +332,7 @@ def ingest_documents(
     else:
         Chroma.from_documents(
             all_chunks,
-            _embeddings,
+            _get_embeddings(),
             persist_directory=str(CHROMA_DIR),
         )
 
@@ -320,12 +373,7 @@ def build_chain(source_type: str | None = None):
         search_kwargs=search_kwargs,
     )
 
-    llm = ChatOllama(
-        model=LLM_MODEL,
-        temperature=0.1,
-        num_ctx=4096,  # fits RX 6500M 4 GB VRAM with phi4-mini
-        num_predict=512,
-    )
+    llm = _get_llm()
 
     chain = (
         RunnableParallel(

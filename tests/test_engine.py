@@ -1,8 +1,7 @@
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
-with patch("langchain_ollama.OllamaEmbeddings"):
-    import engine
+import engine
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
