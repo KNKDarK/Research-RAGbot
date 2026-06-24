@@ -20,7 +20,7 @@ os.environ.setdefault("OLLAMA_GPU_OVERHEAD", "256MiB")  # keep headroom
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -44,7 +44,7 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 # LLM provider: "ollama", "openai", or "groq" (None → auto-detect)
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER")  # default: auto-detect
 LLM_MODEL = os.environ.get("LLM_MODEL", "phi4-mini")  # Ollama model
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+GOOGLE_MODEL = os.environ.get("GOOGLE_MODEL", "gemini-1.5-flash")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
 
 CHUNK_SIZE = 512
@@ -109,13 +109,13 @@ def _get_llm():
     provider = (
         LLM_PROVIDER
         if LLM_PROVIDER is not None
-        else ("ollama" if _ollama_available() else "openai")
+        else ("ollama" if _ollama_available() else "google")
     )
-    if provider == "openai":
-        return ChatOpenAI(
-            model=OPENAI_MODEL,
+    if provider == "google":
+        return ChatGoogleGenerativeAI(
+            model=GOOGLE_MODEL,
             temperature=0.1,
-            max_tokens=512,
+            max_output_tokens=512,
         )
     if provider == "groq":
         from langchain_groq import ChatGroq  # type: ignore[import-untyped]  # noqa: PLC0415  # pylint: disable=import-outside-toplevel

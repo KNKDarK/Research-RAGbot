@@ -32,7 +32,7 @@ def _make_mock_engine(**overrides):
         "EMBED_MODEL": "nomic-embed-text",
         "LLM_MODEL": "phi4-mini",
         "HF_EMBED_MODEL": "all-MiniLM-L6-v2",
-        "OPENAI_MODEL": "gpt-4o-mini",
+        "GOOGLE_MODEL": "gemini-1.5-flash",
         "GROQ_MODEL": "llama-3.1-8b-instant",
         "ingest_documents": MagicMock(return_value=(0, 0)),
         "build_chain": MagicMock(return_value=(None, None)),

@@ -116,7 +116,7 @@ with st.sidebar:
         EMBED_MODEL,
         LLM_MODEL,
         HF_EMBED_MODEL,
-        OPENAI_MODEL,
+        GOOGLE_MODEL,
         GROQ_MODEL,
         _ollama_available,
     )
@@ -129,7 +129,7 @@ with st.sidebar:
     _llm_provider = (
         LLM_PROVIDER
         if LLM_PROVIDER is not None
-        else ("ollama" if _ollama_available() else "openai")
+        else ("ollama" if _ollama_available() else "google")
     )
 
     embed_label = (
@@ -138,7 +138,7 @@ with st.sidebar:
     llm_label = (
         f"{LLM_MODEL}"
         if _llm_provider == "ollama"
-        else (f"{OPENAI_MODEL}" if _llm_provider == "openai" else f"{GROQ_MODEL}")
+        else (f"{GOOGLE_MODEL}" if _llm_provider == "google" else f"{GROQ_MODEL}")
     )
 
     st.markdown("#### ⚡ Provider Status")
@@ -377,10 +377,20 @@ if not st.session_state.ready and st.session_state.doc_count == 0:
 # ── Ensure chain is ready ─────────────────────────────────────────────────────
 if st.session_state.chain is None:
     with st.spinner("Loading model…"):
-        st.session_state.chain, st.session_state.retriever = build_chain(
-            source_type=st.session_state.source_type
-        )
-        st.session_state.ready = st.session_state.chain is not None
+        try:
+            st.session_state.chain, st.session_state.retriever = build_chain(
+                source_type=st.session_state.source_type
+            )
+            st.session_state.ready = st.session_state.chain is not None
+        except Exception as e:
+            st.error(
+                "**Missing API Key or Provider Configuration**\n\n"
+                f"Details: {e}\n\n"
+                "If you are deploying on Streamlit Cloud, local models (Ollama) aren't available, "
+                "so it falls back to Google or Groq. Please go to **Manage app > Settings > Secrets** "
+                "and add your `GOOGLE_API_KEY` or configure a different provider."
+            )
+            st.stop()
 
 # ── Chat history display ───────────────────────────────────────────────────────
 for msg in st.session_state.messages:
