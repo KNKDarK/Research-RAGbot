@@ -475,6 +475,46 @@ for msg in st.session_state.messages:
                         unsafe_allow_html=True,
                     )
 
+# ── Query routing ───────────────────────────────────────────────────────────────
+_SUMMARY_KEYWORDS = [
+    "explain the paper",
+    "summarize",
+    "overview of the paper",
+    "what is this paper about",
+    "explain in detail",
+    "give me a summary",
+    "what does the paper say",
+    "main points",
+    "key findings",
+    "tl;dr",
+    "tldr",
+    "summarize all",
+]
+
+
+def _routed_summary(src_type: str | None) -> str | None:
+    prog_bar = st.progress(0, text="Mapping document sections…")
+    status_txt = st.empty()
+
+    def _cb(current, total, stage):
+        prog_bar.progress(
+            int(current / total * 100), text=f"{stage} ({current}/{total})"
+        )
+
+    try:
+        result = summarize_documents(
+            source_type=src_type,
+            progress_callback=_cb,
+        )
+        prog_bar.empty()
+        status_txt.empty()
+        return result
+    except Exception as e:
+        prog_bar.empty()
+        status_txt.error(f"Summarization failed: {e}")
+        return None
+
+
 # ── Chat input ─────────────────────────────────────────────────────────────────
 if prompt := st.chat_input("Ask something about your documents…"):
     # Store user message
@@ -485,15 +525,41 @@ if prompt := st.chat_input("Ask something about your documents…"):
         unsafe_allow_html=True,
     )
 
+    source_type_filter = (
+        st.session_state.source_type if st.session_state.source_type != "all" else None
+    )
+
+    # Route summary-like queries to map-reduce instead of RAG
+    lower = prompt.lower().strip()
+    is_summary_query = any(kw in lower for kw in _SUMMARY_KEYWORDS)
+
+    if is_summary_query:
+        with st.spinner("📝 Generating full-document summary…"):
+            summary = _routed_summary(source_type_filter)
+        if summary:
+            st.markdown(
+                '<div class="chat-label label-ai">🔬 Research Assistant</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f'<div class="chat-bubble-ai">{html.escape(summary)}</div>',
+                unsafe_allow_html=True,
+            )
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": summary,
+                    "sources": [],
+                    "context": [],
+                }
+            )
+            st.rerun()
+        # fall through to RAG if summarization returned nothing
+
     # Single retrieval — eliminates redundant ChromaDB query
     sources: list[dict] = []
     context_chunks: list[dict] = []
     if st.session_state.show_sources or st.session_state.show_context:
-        source_type_filter = (
-            st.session_state.source_type
-            if st.session_state.source_type != "all"
-            else None
-        )
         context_chunks, sources = retrieve_for_query(prompt, source_type_filter)
 
     # Show context expander first (before the answer)
