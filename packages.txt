@@ -1,5 +1,6 @@
 tesseract-ocr
 tesseract-ocr-eng
+poppler-utils
 libsm6
 libxext6
 libxrender-dev

@@ -344,8 +344,8 @@ def _load_pdf(path: Path) -> list[Document]:
             ocr_docs = _ocr_pdf(path)
             if ocr_docs:
                 return ocr_docs
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] OCR fallback failed for {path.name}: {e}")
 
     return docs
 
