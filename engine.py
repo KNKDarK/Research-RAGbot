@@ -330,8 +330,34 @@ def _load_pdf(path: Path) -> list[Document]:
 
     reader = PdfReader(str(path))
     docs: list[Document] = []
+    total_text = ""
     for i, page in enumerate(reader.pages):
         text = page.extract_text()
+        total_text += text
+        if text.strip():
+            docs.append(
+                Document(page_content=text, metadata={"page": i, "source": path.name})
+            )
+
+    if len(total_text.strip()) < 100:
+        try:
+            ocr_docs = _ocr_pdf(path)
+            if ocr_docs:
+                return ocr_docs
+        except Exception:
+            pass
+
+    return docs
+
+
+def _ocr_pdf(path: Path) -> list[Document]:
+    from pdf2image import convert_from_path  # pylint: disable=import-outside-toplevel
+    import pytesseract  # pylint: disable=import-outside-toplevel
+
+    images = convert_from_path(str(path), dpi=300)
+    docs: list[Document] = []
+    for i, img in enumerate(images):
+        text = pytesseract.image_to_string(img)
         if text.strip():
             docs.append(
                 Document(page_content=text, metadata={"page": i, "source": path.name})
