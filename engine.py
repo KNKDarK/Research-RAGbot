@@ -57,12 +57,12 @@ MMR_LAMBDA = 0.65  # diversity vs relevance (0=max diversity, 1=max relevance)
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 RAG_PROMPT = ChatPromptTemplate.from_template(
-    """You are an expert Scientific Research Assistant. Use the following pieces of \
-retrieved context to answer the question at the end.
-If you don't know the answer, say that you don't know based on the documents—do not \
-try to make up an answer.
-Always structure your answer clearly with bullet points and reference the paper or \
-author if mentioned in the context.
+    """You are an expert Scientific Research Assistant. Use the provided context to \
+answer the question. If the context is incomplete, synthesize the best possible \
+answer from the available information and note what is missing rather than refusing \
+to answer.
+Structure your answer clearly with bullet points and reference the paper or author \
+if mentioned in the context.
 
 Context:
 {context}
@@ -333,6 +333,8 @@ def _extract_pypdf(path: Path) -> tuple[list[Document], str]:
     total = ""
     for i, page in enumerate(reader.pages):
         text = page.extract_text()
+        if not text.strip():
+            text = page.extract_text(extraction_mode="layout")
         total += text
         if text.strip():
             docs.append(
