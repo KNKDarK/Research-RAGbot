@@ -20,7 +20,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import ChatOpenAI
-from langchain_groq import ChatGroq
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -92,6 +91,8 @@ def _get_llm():
             max_tokens=512,
         )
     if LLM_PROVIDER == "groq":
+        from langchain_groq import ChatGroq  # type: ignore[import-untyped]  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+
         return ChatGroq(
             model=GROQ_MODEL,
             temperature=0.1,
