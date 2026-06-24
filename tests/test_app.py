@@ -46,6 +46,7 @@ def _make_mock_engine(**overrides):
         "clear_uploads": MagicMock(),
         "clear_vector_store": MagicMock(),
         "stream_with_retry": lambda chain, input_data, **_kw: chain.stream(input_data),
+        "summarize_documents": MagicMock(return_value="Mock summary"),
     }
     defaults.update(overrides)
     for k, v in defaults.items():
@@ -93,6 +94,18 @@ def test_app_shows_empty_state(app):
 def test_app_has_three_buttons(app):
     at, _ = app
     assert len(at.button) == 3
+
+
+def test_app_has_summarize_button_when_docs_exist(app):
+    mock_engine = _make_mock_engine(
+        get_doc_count=MagicMock(return_value=5),
+        build_chain=MagicMock(return_value=(MagicMock(), MagicMock())),
+    )
+    sys.modules["engine"] = mock_engine
+    at = AppTest.from_file("app.py", default_timeout=10)
+    at.run()
+    assert len(at.button) == 4
+    assert "Summarize" in at.button[3].label
 
 
 def test_app_has_source_radio(app):

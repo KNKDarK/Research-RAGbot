@@ -19,6 +19,8 @@ from engine import (
     get_doc_count,
     get_collection_stats,
     clear_uploads,
+    stream_with_retry,
+    summarize_documents,
 )
 
 # ── Page config ────────────────────────────────────────────────────────────────
@@ -87,6 +89,8 @@ def _init_state():
         "source_type": "all",
         "show_context": True,
         "show_sources": True,
+        "_summarize": False,
+        "_summary": None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -305,6 +309,11 @@ with st.sidebar:
             st.session_state.last_context = []
             st.rerun()
 
+    if st.session_state.doc_count > 0:
+        if st.button("📝 Summarize all documents", use_container_width=True):
+            st.session_state._summarize = True
+            st.rerun()
+
     st.divider()
 
     # ── Settings ──────────────────────────────────────────────────────────────
@@ -392,6 +401,46 @@ if st.session_state.chain is None:
             )
             st.stop()
 
+# ── Summarization ──────────────────────────────────────────────────────────────
+if st.session_state._summarize:
+    st.session_state._summarize = False
+    source_type_filter = (
+        st.session_state.source_type if st.session_state.source_type != "all" else None
+    )
+    progress_bar = st.progress(0, text="Mapping document sections…")
+    status_text = st.empty()
+
+    def _sum_cb(current, total, stage):
+        progress_bar.progress(
+            int(current / total * 100), text=f"{stage} ({current}/{total})"
+        )
+
+    try:
+        summary = summarize_documents(
+            source_type=source_type_filter,
+            progress_callback=_sum_cb,
+        )
+        progress_bar.empty()
+        status_text.empty()
+        if summary:
+            st.session_state._summary = summary
+            st.rerun()
+        else:
+            st.warning("No documents found to summarize.")
+    except Exception as e:
+        progress_bar.empty()
+        status_text.error(f"Summarization failed: {e}")
+
+if st.session_state._summary:
+    st.markdown(
+        f'<div class="chat-label label-ai">📝 Document Summary</div>'
+        f'<div class="chat-bubble-ai">{html.escape(st.session_state._summary)}</div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("🗑 Clear summary"):
+        st.session_state._summary = None
+        st.rerun()
+
 # ── Chat history display ───────────────────────────────────────────────────────
 for msg in st.session_state.messages:
     role = msg["role"]
@@ -476,7 +525,7 @@ if prompt := st.chat_input("Ask something about your documents…"):
 
     try:
         with st.spinner(""):
-            for chunk in st.session_state.chain.stream(prompt):
+            for chunk in stream_with_retry(st.session_state.chain, prompt):
                 full_response += chunk
                 response_box.markdown(
                     f'<div class="chat-bubble-ai">{html.escape(full_response)}▌</div>',

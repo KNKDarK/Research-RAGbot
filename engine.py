@@ -465,3 +465,62 @@ def build_chain(source_type: str | None = None):
     )
 
     return chain, retriever
+
+
+# ── Map-reduce summarization ───────────────────────────────────────────────────
+_MAP_PROMPT = ChatPromptTemplate.from_template(
+    "Summarize the following section of a research paper concisely. "
+    "Capture the key findings, methodology, and conclusions.\n\n{text}\n\nSummary:"
+)
+
+_REDUCE_PROMPT = ChatPromptTemplate.from_template(
+    "Synthesize the following section summaries into one coherent summary "
+    "of the entire paper. Cover the main topic, methodology, key findings, "
+    "and conclusions.\n\n{summaries}\n\nComprehensive summary:"
+)
+
+
+def summarize_documents(
+    source_type: str | None = None,
+    progress_callback=None,
+) -> str | None:
+    """Map-reduce summarization of all documents in DATA_DIR / UPLOAD_DIR."""
+    files: list[Path] = []
+    if source_type in (None, "preloaded") and DATA_DIR.exists():
+        files.extend(f for f in DATA_DIR.rglob("*") if f.suffix.lower() in _SUPPORTED)
+    if source_type in (None, "uploaded") and UPLOAD_DIR.exists():
+        files.extend(f for f in UPLOAD_DIR.rglob("*") if f.suffix.lower() in _SUPPORTED)
+    if not files:
+        return None
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE * 2,
+        chunk_overlap=CHUNK_OVERLAP,
+        separators=["\n\n", "\n", ".", "!", "?", ",", " ", ""],
+    )
+    all_docs: list[Document] = []
+    for f in files:
+        docs = load_file(f)
+        if docs:
+            all_docs.extend(splitter.split_documents(docs))
+    if not all_docs:
+        return None
+
+    llm = _get_llm()
+    map_chain = _MAP_PROMPT | llm | StrOutputParser()
+
+    summaries = []
+    for i, doc in enumerate(all_docs):
+        if progress_callback:
+            progress_callback(i + 1, len(all_docs), "Summarizing chunks")
+        summaries.append(map_chain.invoke({"text": doc.page_content}))
+
+    if len(summaries) < 2:
+        return summaries[0] if summaries else None
+
+    if progress_callback:
+        progress_callback(1, 1, "Reducing summaries")
+
+    reduce_chain = _REDUCE_PROMPT | llm | StrOutputParser()
+    combined = "\n\n".join(f"Section {i+1}: {s}" for i, s in enumerate(summaries))
+    return reduce_chain.invoke({"summaries": combined})
