@@ -8,7 +8,9 @@ engine.py — Optimized RAG Engine
 # ruff: noqa: E402
 
 import os
+import random
 import shutil
+import time
 from functools import cache
 from pathlib import Path
 
@@ -70,17 +72,65 @@ Helpful Answer:"""
 )
 
 
+# ── Exponential backoff retry ───────────────────────────────────────────────────
+def invoke_with_retry(
+    fn,
+    *args,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 60.0,
+    **kwargs,
+):
+    """Call *fn(*args, **kwargs)* with exponential backoff + jitter on failure."""
+    last_exception = None
+    for attempt in range(max_retries + 1):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            last_exception = e
+            if attempt < max_retries:
+                delay = min(base_delay * (2**attempt), max_delay)
+                jitter = random.uniform(0, delay * 0.1)
+                time.sleep(delay + jitter)
+    raise last_exception  # type: ignore[misc]
+
+
+def stream_with_retry(
+    chain,
+    input_data,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 60.0,
+):
+    """Yield chunks from *chain.stream(input_data)* with backoff retry."""
+    last_exception = None
+    for attempt in range(max_retries + 1):
+        try:
+            yield from chain.stream(input_data)
+            return
+        except Exception as e:
+            last_exception = e
+            if attempt < max_retries:
+                delay = min(base_delay * (2**attempt), max_delay)
+                jitter = random.uniform(0, delay * 0.1)
+                time.sleep(delay + jitter)
+    raise last_exception  # type: ignore[misc]
+
+
 # ── Auto-detect (cached) ───────────────────────────────────────────────────────
 @cache
 def _ollama_available() -> bool:
     """Check whether Ollama is reachable.  Result is cached after first call."""
     import requests  # pylint: disable=import-outside-toplevel
 
-    try:
-        response = requests.get(f"{OLLAMA_HOST}/api/version", timeout=2)
-        return response.ok
-    except Exception:
-        return False
+    for attempt in range(3):
+        try:
+            response = requests.get(f"{OLLAMA_HOST}/api/version", timeout=2)
+            return response.ok
+        except Exception:
+            if attempt < 2:
+                time.sleep(1.0 * (2**attempt))
+    return False
 
 
 # ── Embeddings (lazy singleton) ────────────────────────────────────────────────

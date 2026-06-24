@@ -45,6 +45,7 @@ def _make_mock_engine(**overrides):
         ),
         "clear_uploads": MagicMock(),
         "clear_vector_store": MagicMock(),
+        "stream_with_retry": lambda chain, input_data, **_kw: chain.stream(input_data),
     }
     defaults.update(overrides)
     for k, v in defaults.items():
