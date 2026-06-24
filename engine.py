@@ -9,6 +9,7 @@ engine.py — Optimized RAG Engine
 
 import os
 import shutil
+from functools import cache
 from pathlib import Path
 
 # ── ROCm / AMD GPU hints (set before importing anything GPU-related) ──────────
@@ -31,15 +32,17 @@ DATA_DIR = Path("./data")  # pre-downloaded / bundled papers
 UPLOAD_DIR = Path("./uploads")  # user-uploaded papers
 CHROMA_DIR = Path("./chroma_db")
 
-# Embedding provider: "ollama" or "huggingface" (default: ollama for local dev)
-EMBED_PROVIDER = os.environ.get("EMBED_PROVIDER", "ollama")
+# Embedding provider: "ollama" or "huggingface" (None → auto-detect)
+EMBED_PROVIDER = os.environ.get("EMBED_PROVIDER")  # default: auto-detect
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "nomic-embed-text")  # Ollama model
 HF_EMBED_MODEL = os.environ.get(
     "HF_EMBED_MODEL", "all-MiniLM-L6-v2"
 )  # HuggingFace model
 
-# LLM provider: "ollama", "openai", or "groq" (default: ollama for local dev)
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
+# LLM provider: "ollama", "openai", or "groq" (None → auto-detect)
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER")  # default: auto-detect
 LLM_MODEL = os.environ.get("LLM_MODEL", "phi4-mini")  # Ollama model
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
@@ -66,6 +69,21 @@ Question: {question}
 Helpful Answer:"""
 )
 
+
+# ── Auto-detect (cached) ───────────────────────────────────────────────────────
+@cache
+def _ollama_available() -> bool:
+    """Check whether Ollama is reachable.  Result is cached after first call."""
+    import urllib.request as _ur  # pylint: disable=import-outside-toplevel
+
+    try:
+        req = _ur.Request(f"{OLLAMA_HOST}/api/version", method="GET")
+        with _ur.urlopen(req, timeout=2):  # noqa: S310
+            return True
+    except Exception:
+        return False
+
+
 # ── Embeddings (lazy singleton) ────────────────────────────────────────────────
 _embeddings_cache = None
 
@@ -74,7 +92,12 @@ def _get_embeddings():
     global _embeddings_cache
     if _embeddings_cache is not None:
         return _embeddings_cache
-    if EMBED_PROVIDER == "ollama":
+    provider = (
+        EMBED_PROVIDER
+        if EMBED_PROVIDER is not None
+        else ("ollama" if _ollama_available() else "huggingface")
+    )
+    if provider == "ollama":
         emb = OllamaEmbeddings(model=EMBED_MODEL)
     else:
         emb = HuggingFaceEmbeddings(model_name=HF_EMBED_MODEL)
@@ -84,13 +107,18 @@ def _get_embeddings():
 
 # ── LLM (lazy) ────────────────────────────────────────────────────────────────
 def _get_llm():
-    if LLM_PROVIDER == "openai":
+    provider = (
+        LLM_PROVIDER
+        if LLM_PROVIDER is not None
+        else ("ollama" if _ollama_available() else "openai")
+    )
+    if provider == "openai":
         return ChatOpenAI(
             model=OPENAI_MODEL,
             temperature=0.1,
             max_tokens=512,
         )
-    if LLM_PROVIDER == "groq":
+    if provider == "groq":
         from langchain_groq import ChatGroq  # type: ignore[import-untyped]  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
 
         return ChatGroq(

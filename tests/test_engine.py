@@ -1,7 +1,13 @@
-from unittest.mock import patch, MagicMock
-from pathlib import Path
+import os
 
-import engine
+# Ensure tests use explicit providers (not auto-detect)
+os.environ["EMBED_PROVIDER"] = "ollama"
+os.environ["LLM_PROVIDER"] = "ollama"
+
+from unittest.mock import patch, MagicMock  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import engine  # noqa: E402
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@ def _make_mock_engine(**overrides):
         "UPLOAD_DIR": Path("./uploads"),
         "EMBED_PROVIDER": "ollama",
         "LLM_PROVIDER": "ollama",
+        "_ollama_available": MagicMock(return_value=True),
         "EMBED_MODEL": "nomic-embed-text",
         "LLM_MODEL": "phi4-mini",
         "HF_EMBED_MODEL": "all-MiniLM-L6-v2",

@@ -118,29 +118,41 @@ with st.sidebar:
         HF_EMBED_MODEL,
         OPENAI_MODEL,
         GROQ_MODEL,
+        _ollama_available,
+    )
+
+    _embed_provider = (
+        EMBED_PROVIDER
+        if EMBED_PROVIDER is not None
+        else ("ollama" if _ollama_available() else "huggingface")
+    )
+    _llm_provider = (
+        LLM_PROVIDER
+        if LLM_PROVIDER is not None
+        else ("ollama" if _ollama_available() else "openai")
     )
 
     embed_label = (
-        f"{EMBED_MODEL}" if EMBED_PROVIDER == "ollama" else f"{HF_EMBED_MODEL}"
+        f"{EMBED_MODEL}" if _embed_provider == "ollama" else f"{HF_EMBED_MODEL}"
     )
     llm_label = (
         f"{LLM_MODEL}"
-        if LLM_PROVIDER == "ollama"
-        else (f"{OPENAI_MODEL}" if LLM_PROVIDER == "openai" else f"{GROQ_MODEL}")
+        if _llm_provider == "ollama"
+        else (f"{OPENAI_MODEL}" if _llm_provider == "openai" else f"{GROQ_MODEL}")
     )
 
     st.markdown("#### ⚡ Provider Status")
     col1, col2 = st.columns(2)
     with col1:
-        color = "green" if EMBED_PROVIDER == "ollama" else "blue"
+        color = "green" if _embed_provider == "ollama" else "blue"
         st.markdown(
-            f'<div class="badge badge-{color}">🔄 {EMBED_PROVIDER}</div>',
+            f'<div class="badge badge-{color}">🔄 {_embed_provider}</div>',
             unsafe_allow_html=True,
         )
     with col2:
-        color = "green" if LLM_PROVIDER == "ollama" else "blue"
+        color = "green" if _llm_provider == "ollama" else "blue"
         st.markdown(
-            f'<div class="badge badge-{color}">🧠 {LLM_PROVIDER}</div>',
+            f'<div class="badge badge-{color}">🧠 {_llm_provider}</div>',
             unsafe_allow_html=True,
         )
 
@@ -301,13 +313,13 @@ with st.sidebar:
             "Show source citations", value=st.session_state.show_sources
         )
         st.session_state.show_context = st.toggle("Show retrieved context", value=True)
-        st.caption(f"Embed: {EMBED_PROVIDER} ({embed_label})")
-        st.caption(f"LLM: {LLM_PROVIDER} ({llm_label})")
+        st.caption(f"Embed: {_embed_provider} ({embed_label})")
+        st.caption(f"LLM: {_llm_provider} ({llm_label})")
         st.caption("Similarity: MMR · k=4")
 
     st.markdown(
         '<div style="font-size:0.68rem; color:#334155; margin-top:1rem; text-align:center;">'
-        f"Powered by {EMBED_PROVIDER} · {LLM_PROVIDER} · LangChain · ChromaDB</div>",
+        f"Powered by {_embed_provider} · {_llm_provider} · LangChain · ChromaDB</div>",
         unsafe_allow_html=True,
     )
 
