@@ -46,6 +46,9 @@ cache/
 # Coverage
 .coverage
 
+# Lock files (Streamlit Cloud uses requirements.txt)
+uv.lock
+
 # OS files
 .DS_Store
 Thumbs.db
