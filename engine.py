@@ -116,6 +116,7 @@ def _get_llm():
             model=GOOGLE_MODEL,
             temperature=0.1,
             max_output_tokens=512,
+            max_retries=3,
         )
     if provider == "groq":
         from langchain_groq import ChatGroq  # type: ignore[import-untyped]  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
