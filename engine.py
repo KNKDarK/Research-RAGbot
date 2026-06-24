@@ -44,7 +44,7 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 # LLM provider: "ollama", "openai", or "groq" (None → auto-detect)
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER")  # default: auto-detect
 LLM_MODEL = os.environ.get("LLM_MODEL", "phi4-mini")  # Ollama model
-GOOGLE_MODEL = os.environ.get("GOOGLE_MODEL", "gemini-1.5-flash")
+GOOGLE_MODEL = os.environ.get("GOOGLE_MODEL", "gemini-3.5-flash")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
 
 CHUNK_SIZE = 512
