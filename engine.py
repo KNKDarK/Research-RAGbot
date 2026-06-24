@@ -325,43 +325,79 @@ def clear_uploads():
 _SUPPORTED = {".pdf", ".txt", ".md", ".markdown"}
 
 
-def _load_pdf(path: Path) -> list[Document]:
+def _extract_pypdf(path: Path) -> tuple[list[Document], str]:
     from pypdf import PdfReader  # pylint: disable=import-outside-toplevel
 
     reader = PdfReader(str(path))
     docs: list[Document] = []
-    total_text = ""
+    total = ""
     for i, page in enumerate(reader.pages):
         text = page.extract_text()
-        total_text += text
+        total += text
         if text.strip():
             docs.append(
                 Document(page_content=text, metadata={"page": i, "source": path.name})
             )
-
-    if len(total_text.strip()) < 100:
-        try:
-            ocr_docs = _ocr_pdf(path)
-            if ocr_docs:
-                return ocr_docs
-        except Exception as e:
-            print(f"[WARN] OCR fallback failed for {path.name}: {e}")
-
-    return docs
+    return docs, total
 
 
-def _ocr_pdf(path: Path) -> list[Document]:
-    from pdf2image import convert_from_path  # pylint: disable=import-outside-toplevel
-    import pytesseract  # pylint: disable=import-outside-toplevel
+def _extract_pdfminer(path: Path) -> tuple[list[Document], str]:
+    from pdfminer.high_level import extract_text  # pylint: disable=import-outside-toplevel
 
-    images = convert_from_path(str(path), dpi=300)
+    text = extract_text(str(path))
+    if text.strip():
+        return [Document(page_content=text, metadata={"source": path.name})], text
+    return [], ""
+
+
+def _ocr_pdf(path: Path) -> list[Document] | None:
+    try:
+        import pytesseract  # pylint: disable=import-outside-toplevel
+        import pypdfium2  # pylint: disable=import-outside-toplevel
+    except ImportError:
+        print("[WARN] pytesseract or pypdfium2 not installed — OCR unavailable")
+        return None
+
+    try:
+        pdf = pypdfium2.PdfDocument(str(path))
+    except Exception as e:
+        print(f"[WARN] pypdfium2 could not open {path.name}: {e}")
+        return None
+
     docs: list[Document] = []
-    for i, img in enumerate(images):
-        text = pytesseract.image_to_string(img)
-        if text.strip():
-            docs.append(
-                Document(page_content=text, metadata={"page": i, "source": path.name})
-            )
+    for i, page in enumerate(pdf):
+        try:
+            bitmap = page.render(scale=3)
+            img = bitmap.to_pil()
+            text = pytesseract.image_to_string(img)
+            if text.strip():
+                docs.append(
+                    Document(
+                        page_content=text, metadata={"page": i, "source": path.name}
+                    )
+                )
+        except Exception as e:
+            print(f"[WARN] OCR failed on page {i} of {path.name}: {e}")
+    pdf.close()
+    return docs if docs else None
+
+
+def _load_pdf(path: Path) -> list[Document]:
+    docs, total = _extract_pypdf(path)
+
+    if len(total.strip()) >= 100:
+        return docs
+
+    pdfminer_docs, pdfminer_total = _extract_pdfminer(path)
+    if len(pdfminer_total.strip()) >= 100:
+        return pdfminer_docs
+
+    ocr_docs = _ocr_pdf(path)
+    if ocr_docs:
+        print(f"[INFO] OCR extracted text from {path.name}")
+        return ocr_docs
+
+    print(f"[WARN] Could not extract any text from {path.name} — scanned PDF?")
     return docs
 
 
