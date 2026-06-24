@@ -74,12 +74,11 @@ Helpful Answer:"""
 @cache
 def _ollama_available() -> bool:
     """Check whether Ollama is reachable.  Result is cached after first call."""
-    import urllib.request as _ur  # pylint: disable=import-outside-toplevel
+    import requests  # pylint: disable=import-outside-toplevel
 
     try:
-        req = _ur.Request(f"{OLLAMA_HOST}/api/version", method="GET")
-        with _ur.urlopen(req, timeout=2):  # noqa: S310
-            return True
+        response = requests.get(f"{OLLAMA_HOST}/api/version", timeout=2)
+        return response.ok
     except Exception:
         return False
 
