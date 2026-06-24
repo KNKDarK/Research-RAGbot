@@ -415,22 +415,33 @@ def _extract_pypdfium2(path: Path) -> tuple[list[Document], str]:
 
 def _load_pdf(path: Path) -> list[Document]:
     docs, total = _extract_pypdf(path)
-
+    print(
+        f"[DEBUG] pypdf extracted {len(total.strip())} chars: {total.strip()[:100]!r}"
+    )
     if len(total.strip()) >= 100:
+        print(f"[INFO] pypdf succeeded for {path.name}")
         return docs
 
     pdfminer_docs, pdfminer_total = _extract_pdfminer(path)
+    print(
+        f"[DEBUG] pdfminer extracted {len(pdfminer_total.strip())} chars: {pdfminer_total.strip()[:100]!r}"
+    )
     if len(pdfminer_total.strip()) >= 100:
+        print(f"[INFO] pdfminer succeeded for {path.name}")
         return pdfminer_docs
 
     pypdfium_docs, pypdfium_total = _extract_pypdfium2(path)
+    print(
+        f"[DEBUG] pypdfium2 extracted {len(pypdfium_total.strip())} chars: {pypdfium_total.strip()[:100]!r}"
+    )
     if len(pypdfium_total.strip()) >= 100:
         print(f"[INFO] pypdfium2 extracted text from {path.name}")
         return pypdfium_docs
 
     ocr_docs = _ocr_pdf(path)
     if ocr_docs:
-        print(f"[INFO] OCR extracted text from {path.name}")
+        ocr_total = sum(len(d.page_content.strip()) for d in ocr_docs)  # pylint: disable=not-an-iterable
+        print(f"[INFO] OCR extracted {ocr_total} chars from {path.name}")
         return ocr_docs
 
     print(f"[WARN] Could not extract any text from {path.name} — scanned PDF?")
@@ -518,6 +529,8 @@ def ingest_documents(
 
 # ── RAG Chain builder ─────────────────────────────────────────────────────────
 def _format_docs(docs: list[Document]) -> str:
+    snippet = docs[0].page_content.strip()[:200] if docs else "(no docs)"
+    print(f"[DEBUG] Retrieved {len(docs)} chunks. First chunk preview:\n{snippet}\n---")
     parts = []
     for d in docs:
         src = d.metadata.get("source_file", d.metadata.get("source", "unknown"))
