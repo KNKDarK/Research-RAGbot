@@ -337,10 +337,14 @@ def test_clear_uploads_remove_dir():
 
 
 def test_load_file_pdf():
-    with patch("engine.PdfReader") as MockReader:
-        mock_page = MagicMock()
-        mock_page.extract_text.return_value = "page text"
-        MockReader.return_value.pages = [mock_page]
+    from langchain_core.documents import Document
+
+    with patch("engine._load_pdf") as mock_load:
+        mock_load.return_value = [
+            Document(
+                page_content="page text", metadata={"page": 0, "source": "test.pdf"}
+            )
+        ]
         result = engine.load_file(Path("test.pdf"))
         assert len(result) == 1
         assert result[0].page_content == "page text"

@@ -11,8 +11,6 @@ import os
 import shutil
 from pathlib import Path
 
-from pypdf import PdfReader
-
 # ── ROCm / AMD GPU hints (set before importing anything GPU-related) ──────────
 os.environ.setdefault("HSA_OVERRIDE_GFX_VERSION", "10.3.0")  # RDNA2 gfx1034
 os.environ.setdefault("OLLAMA_NUM_GPU", "1")
@@ -249,6 +247,8 @@ _SUPPORTED = {".pdf", ".txt", ".md", ".markdown"}
 
 
 def _load_pdf(path: Path) -> list[Document]:
+    from pypdf import PdfReader  # pylint: disable=import-outside-toplevel
+
     reader = PdfReader(str(path))
     docs: list[Document] = []
     for i, page in enumerate(reader.pages):
